@@ -20,10 +20,16 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (12 piezas, agrupadas por categoría)
+## Las pruebas (13 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
+
+**★ Instrumento en vivo**
+
+| # | Prueba | Qué hace | Cat. | VI/CD |
+|---|--------|----------|------|-------|
+| 13 | [Instrumento en vivo](pruebas/13-instrumento.html) | Tocas (piano / teclado / Web MIDI) y el círculo, el Tonnetz y las ondas reaccionan a la vez. | D | 9/7 |
 
 **I · Geometría de acordes y tríadas**
 
@@ -64,8 +70,8 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
   toroidal 3D** ya son piezas profundas; siguiente paso: orbifold de Tymoczko (Möbius de díadas).
 - **C · Ensayo explorable** ◐ *(empezado)* — la portada agrupada por categoría es el primer paso hacia
   un scrollytelling con widgets incrustados (modelo osar.fr).
-- **D · Playground audiovisual en vivo** — un instrumento: tocas notas/MIDI y varias visualizaciones
-  reaccionan a la vez (Tonnetz + chroma + cymatics).
+- **D · Playground audiovisual en vivo** ◐ *(empezado)* — el **Instrumento (13)** ya hace esto:
+  tocas (piano/teclado/MIDI) y el círculo + Tonnetz + ondas reaccionan a la vez.
 - **E · Hub mixto** — A como base + 1–2 piezas de B + intro narrativa de C. Destino a medio plazo.
 
 ## Ideas para el siguiente lote
@@ -94,7 +100,8 @@ music0/
     ├── 09-helice-shepard.html
     ├── 10-lattice-ji.html
     ├── 11-tonnetz-midi.html
-    └── 12-tonnetz-toro.html
+    ├── 12-tonnetz-toro.html
+    └── 13-instrumento.html
 ```
 
 ## Stack
