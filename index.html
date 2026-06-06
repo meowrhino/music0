@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>music0 · visualizaciones de la armonía</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#eaeaf6; --dim:#8a8aac;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;
+    overflow-x:hidden;-webkit-font-smoothing:antialiased}
+  #bg{position:fixed;inset:0;z-index:0;opacity:.55}
+  .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:64px 24px 80px}
+  header{margin-bottom:48px}
+  .kicker{font:600 12px var(--mono);letter-spacing:.34em;color:var(--cy);text-transform:uppercase}
+  h1{font:800 clamp(44px,10vw,104px)/0.92 var(--sans);letter-spacing:-.03em;margin:10px 0 6px;
+    background:linear-gradient(92deg,var(--cy),var(--pu) 42%,var(--mg) 78%,var(--yl));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{max-width:680px;font:400 17px/1.6 var(--sans);color:#c2c2d8}
+  .lede b{color:var(--txt)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px;margin-top:14px}
+  a.card{display:block;text-decoration:none;color:inherit;position:relative;overflow:hidden;
+    background:linear-gradient(180deg,#0e0e1c,#0a0a14);border:1px solid #1d1d34;border-radius:18px;
+    padding:22px 20px 18px;transition:.22s cubic-bezier(.2,.7,.2,1)}
+  a.card:hover{transform:translateY(-4px);border-color:var(--ac);
+    box-shadow:0 14px 40px -16px var(--ac),0 0 0 1px var(--ac) inset}
+  .num{font:800 13px var(--mono);color:var(--ac);letter-spacing:.1em}
+  .ttl{font:750 22px/1.15 var(--sans);margin:12px 0 8px;letter-spacing:-.01em}
+  .desc{font:400 14px/1.55 var(--sans);color:#aaaac6;min-height:62px}
+  .meta{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px}
+  .badge{font:700 10px var(--mono);padding:4px 7px;border-radius:7px;background:#15152a;color:var(--dim)}
+  .badge.vi{color:var(--cy)} .badge.cd{color:var(--pu)}
+  .tag{font:600 10px var(--mono);color:var(--dim);border:1px solid #25253f;border-radius:7px;padding:4px 7px}
+  .cat{margin-left:auto;font:600 10px var(--mono);color:#55557a}
+  .glow{position:absolute;right:-40px;top:-40px;width:140px;height:140px;border-radius:50%;
+    background:var(--ac);filter:blur(60px);opacity:.16;pointer-events:none}
+  .arrow{position:absolute;right:18px;bottom:16px;color:var(--ac);font:700 18px var(--mono);
+    opacity:0;transform:translateX(-6px);transition:.22s}
+  a.card:hover .arrow{opacity:1;transform:translateX(0)}
+  section.more{margin-top:64px;padding-top:40px;border-top:1px solid #18182e}
+  section.more h2{font:750 22px var(--sans);margin-bottom:6px}
+  section.more p.s{color:var(--dim);font:400 14px/1.5 var(--sans);margin-bottom:22px;max-width:680px}
+  .rumbos{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+  .rumbo{background:#0b0b16;border:1px solid #1a1a30;border-radius:14px;padding:16px}
+  .rumbo h3{font:700 14px var(--mono);color:var(--yl);margin-bottom:6px}
+  .rumbo.now h3{color:var(--cy)} .rumbo.now{border-color:#21534c}
+  .rumbo p{font:400 13px/1.5 var(--sans);color:#9a9ab6}
+  footer{margin-top:48px;display:flex;flex-wrap:wrap;gap:18px;align-items:center;
+    font:500 13px var(--mono);color:var(--dim)}
+  footer a{color:var(--cy);text-decoration:none;border-bottom:1px solid transparent}
+  footer a:hover{border-color:var(--cy)}
+  .note{font:400 12px/1.5 var(--sans);color:#6a6a88;max-width:680px;margin-top:10px}
+</style>
+</head>
+<body>
+<canvas id="bg"></canvas>
+<div class="wrap">
+  <header>
+    <div class="kicker">music0 · galería</div>
+    <h1>la armonía,<br>hecha imagen</h1>
+    <p class="lede">Seis mini-experimentos para <b>ver y oír</b> la teoría musical: intervalos como
+      curvas, acordes como polígonos, tríadas en una retícula, sobretonos, líneas nodales de arena y
+      la curva de disonancia. Todo en <b>Canvas + Web Audio</b>, sin dependencias. Toca cualquiera.</p>
+  </header>
+
+  <div class="grid" id="grid"></div>
+
+  <section class="more">
+    <h2>¿Hacia dónde lo llevamos?</h2>
+    <p class="s">Esto es el rumbo <b>A (galería + navegador)</b>. Cada pieza puede crecer; el destino
+      natural es un hub que mezcle galería, alguna pieza profunda y una intro narrativa.</p>
+    <div class="rumbos">
+      <div class="rumbo now"><h3>A · galería ✦</h3><p>Mini-experimentos autónomos + este navegador. Donde estamos.</p></div>
+      <div class="rumbo"><h3>B · showpiece</h3><p>Una pieza pulida a fondo: Tonnetz toroidal 3D o lattice de entonación justa.</p></div>
+      <div class="rumbo"><h3>C · ensayo explorable</h3><p>Scrollytelling que explica la armonía con widgets incrustados.</p></div>
+      <div class="rumbo"><h3>D · playground en vivo</h3><p>Instrumento: tocas (MIDI) y varias visualizaciones reaccionan a la vez.</p></div>
+    </div>
+  </section>
+
+  <footer>
+    <span>music0</span>
+    <a href="investigacion.md">investigación</a>
+    <a href="README.md">readme</a>
+    <span style="color:#44445e">VI = interés visual · CD = profundidad conceptual (de la investigación)</span>
+  </footer>
+  <p class="note">Sugerencia: ábrelo con un servidor estático (p. ej. <code>python3 -m http.server</code>)
+    para que el audio y todo funcione sin fricciones; también abre directo desde el archivo.</p>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const CARDS=[
+    {n:'01',ac:'#3ee8d0',ttl:'Lissajous',cat:'cat. 2',vi:9,cd:8,
+     d:'Dos tonos cuyo cociente es el intervalo. Ratios simples → curvas estables; temperados → giran.',
+     tags:['Canvas','Web Audio'],href:'pruebas/01-lissajous.html'},
+    {n:'02',ac:'#ff4d9d',ttl:'Círculo cromático',cat:'cat. 1',vi:8,cd:6,
+     d:'Las 12 notas en círculo; cada acorde es un polígono. Cambia entre orden cromático y de quintas.',
+     tags:['Canvas','Web Audio'],href:'pruebas/02-circulo-cromatico.html'},
+    {n:'03',ac:'#9b6bff',ttl:'Tonnetz',cat:'cat. 4',vi:9,cd:9,
+     d:'La retícula neo-riemanniana de tríadas. ▲ mayor, ▼ menor. Pasa el ratón y haz clic para sonar.',
+     tags:['Canvas','Web Audio'],href:'pruebas/03-tonnetz.html'},
+    {n:'04',ac:'#e9ff5a',ttl:'Serie armónica',cat:'cat. 2',vi:8,cd:9,
+     d:'Una cuerda y sus 16 sobretonos: onda estacionaria, ratios y desviación en cents. Timbre aditivo.',
+     tags:['Canvas','Web Audio'],href:'pruebas/04-serie-armonica.html'},
+    {n:'05',ac:'#5aa9ff',ttl:'Cymatics · Chladni',cat:'cat. 3',vi:9,cd:8,
+     d:'12 000 granos que huyen de la vibración y se posan en las líneas nodales del modo (n, m).',
+     tags:['Canvas','partículas'],href:'pruebas/05-cymatics-chladni.html'},
+    {n:'06',ac:'#3ee8d0',ttl:'Curva de disonancia',cat:'cat. 6',vi:8,cd:10,
+     d:'El modelo Plomp–Levelt/Sethares: los valles marcan los intervalos consonantes. Arrastra y escucha.',
+     tags:['Canvas','Web Audio'],href:'pruebas/06-curva-disonancia.html'},
+  ];
+  const grid=document.getElementById('grid');
+  CARDS.forEach(c=>{
+    const a=document.createElement('a');a.className='card';a.href=c.href;a.style.setProperty('--ac',c.ac);
+    a.innerHTML=`<div class="glow"></div><div class="num">${c.n}</div>
+      <div class="ttl">${c.ttl}</div><div class="desc">${c.d}</div>
+      <div class="meta"><span class="badge vi">VI ${c.vi}</span><span class="badge cd">CD ${c.cd}</span>
+      ${c.tags.map(t=>`<span class="tag">${t}</span>`).join('')}<span class="cat">${c.cat}</span></div>
+      <span class="arrow">→</span>`;
+    grid.appendChild(a);
+  });
+
+  // fondo: Lissajous tenues que se transforman lentamente
+  const cv=document.getElementById('bg'),ctx=cv.getContext('2d');
+  let W,H,dpr;
+  function resize(){dpr=Math.min(window.devicePixelRatio||1,2);
+    W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
+    ctx.setTransform(dpr,0,0,dpr,0,0);}
+  addEventListener('resize',resize);resize();
+  const COLORS=['#3ee8d0','#9b6bff','#ff4d9d'];
+  function draw(now){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    const t=now/1000;
+    const cx=W*0.5,cy=H*0.42,R=Math.min(W,H)*0.42;
+    ctx.globalCompositeOperation='lighter';
+    for(let k=0;k<3;k++){
+      const a=2+k, b=3+k, ph=t*0.15*(k+1);
+      ctx.beginPath();
+      for(let i=0;i<=1400;i++){const tt=i/1400*2*Math.PI;
+        const x=cx+R*Math.sin(a*tt+ph), y=cy+R*0.8*Math.sin(b*tt);
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+      ctx.strokeStyle=COLORS[k]+'22';ctx.lineWidth=1.2;ctx.stroke();
+    }
+    ctx.globalCompositeOperation='source-over';
+    // viñeta inferior para legibilidad
+    const g=ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0,'#06060d00');g.addColorStop(1,'#06060dcc');
+    ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  }
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

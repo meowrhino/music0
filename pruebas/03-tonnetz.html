@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>03 · Tonnetz — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    padding:14px 18px;z-index:5;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .name{position:fixed;left:18px;bottom:18px;z-index:5;font:700 22px/1 var(--mono)}
+  .name small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:6px;max-width:280px}
+  .legend{position:fixed;right:18px;bottom:18px;z-index:5;font:500 11px/1.8 var(--mono);color:var(--dim);
+    text-align:right}
+  .legend b{color:var(--cy)} .legend i{color:var(--mg);font-style:normal}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">03 · TONNETZ</h1>
+  <span class="sub">la retícula de tríadas (neo-riemanniana)</span>
+</div>
+<div class="name" id="name">pasa el ratón<small>→ quinta · ↗ 3ª mayor · ↘ 3ª menor. Triángulo ▲ = acorde mayor, ▼ = menor. Clic para sonar.</small></div>
+<div class="legend"><b>▲ mayor</b> &nbsp; <i>▼ menor</i></div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,S,cx,cy;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2; S=Math.max(56,Math.min(92,Math.min(W,H)/8));
+  }
+  window.addEventListener('resize',resize);
+
+  const K=Math.sqrt(3)/2;                  // altura del triángulo equilátero
+  function P(a,b){ return { x: cx + a*S + b*S/2, y: cy - b*S*K }; }
+  function pc(a,b){ return ((7*a + 4*b)%12 + 12)%12; }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playPcs(pcs){
+    const a=ctxOn(),t=a.currentTime,dur=1.1;
+    const g=a.createGain();g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    pcs.forEach(p=>{const o=a.createOscillator();o.type='triangle';o.frequency.value=freq(60+p);
+      o.connect(g);o.start(t);o.stop(t+dur);});
+  }
+
+  // ---------- triángulo bajo el cursor ----------
+  let hover=null;   // {verts:[{a,b}], pcs:[], name, major, cxp, cyp}
+  function triAt(mx,my){
+    const b=-(my-cy)/(S*K);
+    const a=((mx-cx)-b*S/2)/S;
+    const i=Math.floor(a), j=Math.floor(b);
+    const fa=a-i, fb=b-j;
+    let verts, major;
+    if(fa+fb<1){ verts=[[i,j],[i+1,j],[i,j+1]]; major=true; }
+    else       { verts=[[i+1,j],[i,j+1],[i+1,j+1]]; major=false; }
+    const v=((7*i+4*j)%12+12)%12;
+    let root, pcs;
+    if(major){ root=v; pcs=[v,(v+4)%12,(v+7)%12]; }
+    else     { root=(v+4)%12; pcs=[root,(root+3)%12,(root+7)%12]; }
+    const ps=verts.map(([a,b])=>P(a,b));
+    return { verts, pcs, root, major,
+      name: NOTE[root]+(major?' mayor':' menor'),
+      ps, cxp:(ps[0].x+ps[1].x+ps[2].x)/3, cyp:(ps[0].y+ps[1].y+ps[2].y)/3 };
+  }
+
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    hover=triAt(e.clientX-r.left,e.clientY-r.top);
+  });
+  cv.addEventListener('mouseleave',()=>hover=null);
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const t=triAt(e.clientX-r.left,e.clientY-r.top);
+    playPcs(t.pcs); pulse=t; pulseT=performance.now();
+  });
+  let pulse=null, pulseT=0;
+
+  // ---------- render ----------
+  function draw(now){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+
+    const bHi=Math.ceil((cy+S)/(S*K)), bLo=Math.floor((cy-H-S)/(S*K));
+    // aristas
+    ctx.strokeStyle='#1a1a32';ctx.lineWidth=1.2;ctx.beginPath();
+    for(let b=bLo;b<=bHi;b++){
+      const aLo=Math.floor((-S-cx-b*S/2)/S), aHi=Math.ceil((W+S-cx-b*S/2)/S);
+      for(let a=aLo;a<=aHi;a++){
+        const p=P(a,b), e1=P(a+1,b), e2=P(a,b+1), e3=P(a+1,b-1);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e1.x,e1.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e2.x,e2.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e3.x,e3.y);
+      }
+    }
+    ctx.stroke();
+
+    // triángulo hover
+    if(hover){ fillTri(hover, hover.major?'rgba(62,232,208,0.16)':'rgba(255,77,157,0.16)'); }
+    // pulso de clic
+    if(pulse){
+      const k=(now-pulseT)/420;
+      if(k<1){ const al=(1-k)*0.5;
+        fillTri(pulse, pulse.major?`rgba(62,232,208,${al})`:`rgba(255,77,157,${al})`); }
+      else pulse=null;
+    }
+
+    // nodos
+    for(let b=bLo;b<=bHi;b++){
+      const aLo=Math.floor((-S-cx-b*S/2)/S), aHi=Math.ceil((W+S-cx-b*S/2)/S);
+      for(let a=aLo;a<=aHi;a++){
+        const p=P(a,b), n=pc(a,b), hue=n*30;
+        const lit = hover && hover.pcs.includes(n) &&
+          hover.verts.some(([va,vb])=>va===a&&vb===b);
+        ctx.beginPath();ctx.arc(p.x,p.y,lit?15:12,0,7);
+        ctx.fillStyle=lit?`hsl(${hue} 85% 62%)`:'#0c0c18';
+        ctx.fill();
+        ctx.lineWidth=1.5;ctx.strokeStyle=`hsl(${hue} ${lit?80:38}% ${lit?70:44}%)`;ctx.stroke();
+        ctx.fillStyle=lit?'#06060d':'#9a9ac0';
+        ctx.font='600 12px '+MONO;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(NOTE[n],p.x,p.y);
+      }
+    }
+
+    if(hover){
+      const el=document.getElementById('name');
+      el.childNodes[0].nodeValue=hover.name;
+      el.querySelector('small').textContent=hover.pcs.map(p=>NOTE[p]).join(' · ')+'  ·  clic para escuchar';
+    }
+  }
+  function fillTri(t,fill){
+    ctx.beginPath();ctx.moveTo(t.ps[0].x,t.ps[0].y);
+    ctx.lineTo(t.ps[1].x,t.ps[1].y);ctx.lineTo(t.ps[2].x,t.ps[2].y);ctx.closePath();
+    ctx.fillStyle=fill;ctx.fill();
+  }
+
+  resize();requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>01 · Lissajous — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    padding:14px 18px;z-index:5;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(900px,94vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:#13132400;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{width:120px;accent-color:var(--mg)}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);
+    color:var(--dim);background:#0c0c18aa;padding:10px 12px;border-radius:12px;border:1px solid #1c1c33}
+  .readout b{color:var(--yl)}
+  @media(max-width:640px){.readout{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">01 · LISSAJOUS</h1>
+  <span class="sub">los intervalos como curvas</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="panel">
+  <div class="grp" id="intervals"></div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">afin.</span>
+    <span class="chip on" id="tuneJust">justa</span>
+    <span class="chip" id="tuneEt">temperada</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">f₁</span>
+    <input type="range" id="baseFreq" min="80" max="330" value="160" step="1">
+  </div>
+  <div class="sep"></div>
+  <span class="chip" id="sound">▶ sonar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE = ['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'];
+  // nombre, semitonos, ratio entero (entonación justa) a:b
+  const INTERVALS = [
+    {n:'unísono', s:0,  a:1,  b:1},
+    {n:'2ªm',     s:1,  a:16, b:15},
+    {n:'2ªM',     s:2,  a:9,  b:8},
+    {n:'3ªm',     s:3,  a:6,  b:5},
+    {n:'3ªM',     s:4,  a:5,  b:4},
+    {n:'4ªJ',     s:5,  a:4,  b:3},
+    {n:'tritono', s:6,  a:7,  b:5},
+    {n:'5ªJ',     s:7,  a:3,  b:2},
+    {n:'6ªm',     s:8,  a:8,  b:5},
+    {n:'6ªM',     s:9,  a:5,  b:3},
+    {n:'7ªm',     s:10, a:16, b:9},
+    {n:'7ªM',     s:11, a:15, b:8},
+    {n:'8ªJ',     s:12, a:2,  b:1},
+  ];
+  let cur = 7;       // 5ª justa por defecto
+  let just = true;   // entonación justa vs temperada
+  let baseF = 160;
+
+  // ---------- canvas ----------
+  const cv = document.getElementById('c');
+  const ctx = cv.getContext('2d');
+  let W=0,H=0,dpr=1;
+  function resize(){
+    dpr = Math.min(window.devicePixelRatio||1, 2);
+    W = cv.clientWidth; H = cv.clientHeight;
+    cv.width = W*dpr; cv.height = H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+
+  // ---------- audio ----------
+  let actx=null, osc1=null, osc2=null, master=null, playing=false;
+  function ensureAudio(){
+    if(actx) return;
+    actx = new (window.AudioContext||window.webkitAudioContext)();
+    master = actx.createGain(); master.gain.value = 0; master.connect(actx.destination);
+    osc1 = actx.createOscillator(); osc1.type='sine';
+    osc2 = actx.createOscillator(); osc2.type='sine';
+    const g1=actx.createGain(), g2=actx.createGain();
+    g1.gain.value=0.5; g2.gain.value=0.5;
+    osc1.connect(g1).connect(master); osc2.connect(g2).connect(master);
+    osc1.start(); osc2.start();
+    updateFreqs();
+  }
+  function freq2(){
+    const iv = INTERVALS[cur];
+    return just ? baseF*iv.a/iv.b : baseF*Math.pow(2, iv.s/12);
+  }
+  function updateFreqs(){
+    if(!actx) return;
+    const t=actx.currentTime+0.02;
+    osc1.frequency.setTargetAtTime(baseF, t, 0.03);
+    osc2.frequency.setTargetAtTime(freq2(), t, 0.03);
+  }
+  function toggleSound(){
+    ensureAudio();
+    if(actx.state==='suspended') actx.resume();
+    playing=!playing;
+    master.gain.setTargetAtTime(playing?0.18:0, actx.currentTime, 0.05);
+    document.getElementById('sound').classList.toggle('on',playing);
+    document.getElementById('sound').textContent = playing?'⏸ sonando':'▶ sonar';
+  }
+
+  // ---------- UI ----------
+  const ivWrap = document.getElementById('intervals');
+  INTERVALS.forEach((iv,i)=>{
+    const el=document.createElement('span');
+    el.className='chip'+(i===cur?' on':''); el.textContent=iv.n; el.dataset.i=i;
+    el.onclick=()=>{ cur=i; [...ivWrap.children].forEach(c=>c.classList.remove('on'));
+      el.classList.add('on'); updateFreqs(); };
+    ivWrap.appendChild(el);
+  });
+  document.getElementById('tuneJust').onclick=()=>{just=true;tune();};
+  document.getElementById('tuneEt').onclick=()=>{just=false;tune();};
+  function tune(){
+    document.getElementById('tuneJust').classList.toggle('on',just);
+    document.getElementById('tuneEt').classList.toggle('on',!just);
+    updateFreqs();
+  }
+  document.getElementById('baseFreq').oninput=e=>{baseF=+e.target.value;updateFreqs();};
+  document.getElementById('sound').onclick=toggleSound;
+
+  // ---------- render ----------
+  let phase=0, lastT=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt = lastT?Math.min((now-lastT)/1000,0.05):0; lastT=now;
+    const iv = INTERVALS[cur];
+    const f2 = freq2(), f2just = baseF*iv.a/iv.b;
+    const beat = f2 - f2just;                 // 0 en justa, pequeño en temperada
+    phase += 2*Math.PI*beat*dt;
+
+    ctx.clearRect(0,0,W,H);
+    const cx=W/2, cy=H/2;
+    const R = Math.min(W,H)*0.36;
+    const a=iv.a, b=iv.b;
+
+    // glow de fondo
+    const breathe = 0.5+0.5*Math.sin(now/900);
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    // curva
+    const N = 2400;
+    ctx.lineWidth = 2.2;
+    for(let pass=0; pass<2; pass++){
+      ctx.beginPath();
+      for(let i=0;i<=N;i++){
+        const t = i/N*2*Math.PI;
+        const x = cx + R*Math.sin(a*t + phase);
+        const y = cy + R*Math.sin(b*t);
+        i? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+      }
+      if(pass===0){ ctx.strokeStyle='rgba(62,232,208,0.14)'; ctx.lineWidth=10; }
+      else { ctx.strokeStyle='rgba(120,255,236,0.95)'; ctx.lineWidth=1.8; }
+      ctx.stroke();
+    }
+    // punto que recorre la curva
+    const tt=(now/1000* (just?0.6:0.6))%(2*Math.PI);
+    const px=cx+R*Math.sin(a*tt+phase), py=cy+R*Math.sin(b*tt);
+    ctx.fillStyle='#ff4d9d';
+    ctx.shadowColor='#ff4d9d'; ctx.shadowBlur=18;
+    ctx.beginPath(); ctx.arc(px,py,4.5+breathe*1.5,0,7); ctx.fill();
+    ctx.restore();
+
+    // marco tenue
+    ctx.strokeStyle='#15152a'; ctx.lineWidth=1;
+    ctx.strokeRect(cx-R-30,cy-R-30,(R+30)*2,(R+30)*2);
+
+    // readout
+    document.getElementById('readout').innerHTML =
+      `intervalo &nbsp;<b>${iv.n}</b><br>`+
+      `ratio &nbsp;<b>${a}:${b}</b> = ${(a/b).toFixed(4)}<br>`+
+      `f₁ <b>${baseF.toFixed(0)}</b> · f₂ <b>${f2.toFixed(1)}</b> Hz<br>`+
+      `batido &nbsp;<b>${Math.abs(beat).toFixed(2)}</b> Hz ${just?'(justa→curva fija)':'(temperada→gira)'}`;
+  }
+  resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

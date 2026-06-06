@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>02 · Círculo cromático — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    padding:14px 18px;z-index:5;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:7px 10px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  select{font:600 12px var(--mono);color:var(--txt);background:#13132a;border:1px solid #2a2a44;
+    border-radius:10px;padding:7px 8px}
+  .name{position:fixed;left:18px;top:64px;z-index:5;font:700 26px/1 var(--mono);color:var(--yl)}
+  .name small{display:block;font:500 12px/1.5 var(--mono);color:var(--dim);margin-top:8px}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">02 · CÍRCULO CROMÁTICO</h1>
+  <span class="sub">acordes como polígonos</span>
+</div>
+<div class="name" id="name">—<small id="nameSub">toca las notas o elige un acorde</small></div>
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">raíz</span>
+    <select id="root"></select>
+  </div>
+  <div class="sep"></div>
+  <div class="grp" id="presets"></div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">disp.</span>
+    <span class="chip on" id="layC">cromático</span>
+    <span class="chip" id="layF">quintas</span>
+  </div>
+  <div class="sep"></div>
+  <span class="chip" id="play">▶ tocar</span>
+  <span class="chip" id="clear">limpiar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const ES  =['Do','Do#','Re','Re#','Mi','Fa','Fa#','Sol','Sol#','La','La#','Si'];
+  const CHORDS=[
+    {n:'Maj', suf:'',     iv:[0,4,7]},
+    {n:'min', suf:'m',    iv:[0,3,7]},
+    {n:'dim', suf:'dim',  iv:[0,3,6]},
+    {n:'aug', suf:'aug',  iv:[0,4,8]},
+    {n:'sus4',suf:'sus4', iv:[0,5,7]},
+    {n:'7',   suf:'7',    iv:[0,4,7,10]},
+    {n:'Maj7',suf:'maj7', iv:[0,4,7,11]},
+    {n:'m7',  suf:'m7',   iv:[0,3,7,10]},
+    {n:'dim7',suf:'dim7', iv:[0,3,6,9]},
+    {n:'m7♭5',suf:'m7b5', iv:[0,3,6,10]},
+  ];
+  // diccionario para reconocer acordes (firma de intervalos -> sufijo)
+  const DICT = CHORDS.map(c=>({key:c.iv.join(','), suf:c.suf}));
+
+  let root=0, layout='chromatic', lastPreset=null;
+  let selected=new Set([0,4,7]); lastPreset=0;
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,nodes=[],R,cx,cy;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2-10; R=Math.min(W,H)*0.34;
+    layoutNodes();
+  }
+  window.addEventListener('resize',resize);
+
+  function slotOf(pc){ return layout==='fifths' ? (pc*7)%12 : pc; }
+  function layoutNodes(){
+    nodes=[];
+    for(let pc=0;pc<12;pc++){
+      const slot=slotOf(pc);
+      const ang=-Math.PI/2 + slot*(2*Math.PI/12);
+      nodes.push({pc, x:cx+R*Math.cos(ang), y:cy+R*Math.sin(ang), ang});
+    }
+  }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playFreqs(freqs){
+    const a=ctxOn(), t=a.currentTime, dur=0.9;
+    const g=a.createGain(); g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.22/Math.sqrt(freqs.length),t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    freqs.forEach(f=>{const o=a.createOscillator();o.type='triangle';o.frequency.value=f;
+      o.connect(g);o.start(t);o.stop(t+dur);});
+  }
+  function playChord(){ const pcs=[...selected].sort((a,b)=>a-b);
+    if(!pcs.length)return; playFreqs(pcs.map(pc=>freq(60+pc))); }
+  function playNote(pc){ playFreqs([freq(60+pc)]); }
+
+  // ---------- detección de acorde ----------
+  function chordName(){
+    const pcs=[...selected].sort((a,b)=>a-b);
+    if(pcs.length<2) return pcs.length? {nm:ES[pcs[0]], sub:'una sola nota'} : {nm:'—',sub:''};
+    for(const r of pcs){
+      const sig=pcs.map(p=>(p-r+12)%12).sort((a,b)=>a-b).join(',');
+      const m=DICT.find(d=>d.key===sig);
+      if(m) return {nm: NOTE[r]+m.suf, sub: pcs.map(p=>ES[p]).join(' · ')};
+    }
+    return {nm: pcs.map(p=>NOTE[p]).join(' '), sub:'conjunto de '+pcs.length+' notas'};
+  }
+  function refreshName(){
+    const r=chordName();
+    document.getElementById('name').childNodes[0].nodeValue=r.nm;
+    document.getElementById('nameSub').textContent=r.sub||'·';
+  }
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    // círculo guía
+    ctx.strokeStyle='#171730';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+
+    // polígono
+    const sel=[...selected].map(pc=>nodes[pc]).sort((a,b)=>a.ang-b.ang);
+    if(sel.length>=2){
+      ctx.beginPath();
+      sel.forEach((nd,i)=> i?ctx.lineTo(nd.x,nd.y):ctx.moveTo(nd.x,nd.y));
+      ctx.closePath();
+      ctx.fillStyle='rgba(62,232,208,0.10)';ctx.fill();
+      ctx.strokeStyle='rgba(62,232,208,0.9)';ctx.lineWidth=2;
+      ctx.shadowColor='#3ee8d0';ctx.shadowBlur=12;ctx.stroke();ctx.shadowBlur=0;
+    }
+
+    // nodos
+    nodes.forEach(nd=>{
+      const on=selected.has(nd.pc);
+      const hue=nd.pc*30;
+      ctx.beginPath();ctx.arc(nd.x,nd.y,on?16:11,0,7);
+      if(on){ ctx.fillStyle=`hsl(${hue} 90% 60%)`;
+        ctx.shadowColor=`hsl(${hue} 90% 60%)`;ctx.shadowBlur=16;ctx.fill();ctx.shadowBlur=0; }
+      else { ctx.fillStyle='#10101e'; ctx.fill();
+        ctx.strokeStyle=`hsl(${hue} 40% 40%)`;ctx.lineWidth=1.5;ctx.stroke(); }
+      ctx.fillStyle=on?'#06060d':'#b8b8d0';
+      ctx.font='600 12px '+getComputedStyle(document.body).getPropertyValue('--mono');
+      ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(NOTE[nd.pc],nd.x,nd.y);
+    });
+  }
+
+  // ---------- interacción ----------
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    let best=-1,bd=1e9;
+    nodes.forEach(nd=>{const d=Math.hypot(nd.x-mx,nd.y-my); if(d<bd){bd=d;best=nd.pc;}});
+    if(bd<24){
+      if(selected.has(best)) selected.delete(best);
+      else { selected.add(best); playNote(best); }
+      lastPreset=null; refreshName();
+    }
+  });
+
+  // ---------- UI ----------
+  const rootSel=document.getElementById('root');
+  ES.forEach((n,i)=>{const o=document.createElement('option');o.value=i;o.textContent=n;rootSel.appendChild(o);});
+  rootSel.value=root;
+  rootSel.onchange=()=>{root=+rootSel.value; if(lastPreset!=null) applyPreset(lastPreset,true);};
+
+  const pre=document.getElementById('presets');
+  CHORDS.forEach((c,i)=>{const el=document.createElement('span');el.className='chip';el.textContent=c.n;
+    el.onclick=()=>applyPreset(i,false); pre.appendChild(el);});
+  function applyPreset(i,silent){
+    lastPreset=i;
+    selected=new Set(CHORDS[i].iv.map(x=>(root+x)%12));
+    [...pre.children].forEach((c,k)=>c.classList.toggle('on',k===i));
+    refreshName(); if(!silent) playChord();
+  }
+  document.getElementById('layC').onclick=()=>setLayout('chromatic');
+  document.getElementById('layF').onclick=()=>setLayout('fifths');
+  function setLayout(l){layout=l;
+    document.getElementById('layC').classList.toggle('on',l==='chromatic');
+    document.getElementById('layF').classList.toggle('on',l==='fifths');
+    layoutNodes();}
+  document.getElementById('play').onclick=playChord;
+  document.getElementById('clear').onclick=()=>{selected.clear();lastPreset=null;
+    [...pre.children].forEach(c=>c.classList.remove('on'));refreshName();};
+
+  resize();
+  applyPreset(0,true); // C mayor de salida
+  refreshName();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

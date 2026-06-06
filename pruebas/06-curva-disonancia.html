@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>06 · Curva de disonancia — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:ew-resize}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    padding:14px 18px;z-index:5;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .hint{position:fixed;right:18px;top:52px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);
+    text-align:right;max-width:280px}
+  .hint code{color:var(--pu)}
+  .read{position:fixed;left:18px;top:52px;z-index:5;font:700 20px/1.2 var(--mono);color:var(--yl)}
+  .read small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:4px}
+  @media(max-width:860px){.hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">06 · CURVA DE DISONANCIA</h1>
+  <span class="sub">Plomp–Levelt · Sethares</span>
+</div>
+<div class="read" id="read">arrastra →<small>sobre la curva para oír el intervalo</small></div>
+<div class="hint">timbre armónico de 6 parciales (1/k).<br>los valles = intervalos consonantes.<br><code>d = Σ ℓ·(5e^(−3.51 s Δf) − 5e^(−5.75 s Δf))</code></div>
+
+<script>
+(function(){
+  "use strict";
+  const f0=261.63, NP=6, RMIN=1.0, RMAX=2.1, SAMP=720;
+  const RATIOS=[
+    {r:1,    n:'1:1'},{r:16/15,n:'16:15'},{r:9/8,n:'9:8'},{r:6/5,n:'6:5'},
+    {r:5/4,  n:'5:4'},{r:4/3, n:'4:3'},{r:7/5,n:'7:5'},{r:3/2,n:'3:2'},
+    {r:8/5,  n:'8:5'},{r:5/3, n:'5:3'},{r:9/5,n:'9:5'},{r:15/8,n:'15:8'},{r:2,n:'2:1'}
+  ];
+
+  function pairDiss(f1,a1,f2,a2){
+    if(f1>f2){const t=f1;f1=f2;f2=t;const u=a1;a1=a2;a2=u;}
+    const s=0.24/(0.0207*f1+18.96), fd=f2-f1, l=Math.min(a1,a2);
+    return l*(5*Math.exp(-3.51*s*fd)-5*Math.exp(-5.75*s*fd));
+  }
+  function dissAt(r){
+    const P=[]; for(let k=1;k<=NP;k++)P.push([f0*k,1/k]);
+    for(let k=1;k<=NP;k++)P.push([f0*r*k,1/k]);
+    let d=0;
+    for(let i=0;i<P.length;i++)for(let j=i+1;j<P.length;j++)
+      d+=pairDiss(P[i][0],P[i][1],P[j][0],P[j][1]);
+    return d;
+  }
+
+  // curva precalculada
+  const curve=new Float32Array(SAMP); let dMax=0,dMin=1e9;
+  for(let i=0;i<SAMP;i++){const r=RMIN+(RMAX-RMIN)*i/(SAMP-1);const d=dissAt(r);
+    curve[i]=d; if(d>dMax)dMax=d; if(d<dMin)dMin=d;}
+  // mínimos locales -> etiqueta con el ratio simple más cercano
+  const minima=[];
+  for(let i=2;i<SAMP-2;i++){
+    if(curve[i]<curve[i-1]&&curve[i]<=curve[i+1]&&curve[i]<curve[i-2]&&curve[i]<curve[i+2]){
+      const r=RMIN+(RMAX-RMIN)*i/(SAMP-1);
+      let best=null,bc=1e9;
+      RATIOS.forEach(R=>{const c=Math.abs(1200*Math.log2(r/R.r));if(c<bc){bc=c;best=R;}});
+      if(bc<22) minima.push({i,r,name:best.n,cents:bc});
+    }
+  }
+
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  let W,H,dpr,padL,padR,padT,padB;
+  function resize(){dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    padL=70;padR=40;padT=H*0.30;padB=70;}
+  window.addEventListener('resize',resize);
+
+  const X=r=>padL+(r-RMIN)/(RMAX-RMIN)*(W-padL-padR);
+  const Y=d=>(H-padB)-((d-dMin)/(dMax-dMin))*((H-padB)-padT);
+
+  // ---------- audio ----------
+  let actx=null,wave=null,oA=null,oB=null,g=null;
+  function ctxOn(){if(!actx){actx=new(window.AudioContext||window.webkitAudioContext)();
+    const im=new Float32Array(NP+1),re=new Float32Array(NP+1);
+    for(let k=1;k<=NP;k++)im[k]=1/k; wave=actx.createPeriodicWave(re,im);}
+    if(actx.state==='suspended')actx.resume();return actx;}
+  function startScrub(r){const a=ctxOn();
+    if(oA)return;
+    g=a.createGain();g.gain.value=0;g.connect(a.destination);
+    oA=a.createOscillator();oB=a.createOscillator();
+    oA.setPeriodicWave(wave);oB.setPeriodicWave(wave);
+    oA.frequency.value=f0;oB.frequency.value=f0*r;
+    oA.connect(g);oB.connect(g);oA.start();oB.start();
+    g.gain.setTargetAtTime(0.14,a.currentTime,0.03);}
+  function moveScrub(r){if(oB)oB.frequency.setTargetAtTime(f0*r,actx.currentTime,0.02);}
+  function stopScrub(){if(!oA)return;g.gain.setTargetAtTime(0,actx.currentTime,0.05);
+    const a=oA,b=oB;setTimeout(()=>{try{a.stop();b.stop();}catch(e){}},250);oA=oB=null;}
+
+  // ---------- interacción ----------
+  let cursorR=1.5, dragging=false;
+  function rFromX(x){return Math.max(RMIN,Math.min(RMAX,RMIN+(x-padL)/(W-padL-padR)*(RMAX-RMIN)));}
+  cv.addEventListener('pointerdown',e=>{const r=cv.getBoundingClientRect();
+    cursorR=rFromX(e.clientX-r.left);dragging=true;cv.setPointerCapture(e.pointerId);startScrub(cursorR);});
+  cv.addEventListener('pointermove',e=>{const r=cv.getBoundingClientRect();
+    const rr=rFromX(e.clientX-r.left);cursorR=rr;if(dragging)moveScrub(rr);});
+  cv.addEventListener('pointerup',()=>{dragging=false;stopScrub();});
+  cv.addEventListener('pointercancel',()=>{dragging=false;stopScrub();});
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    // rejilla en ratios notables
+    ctx.font='600 11px '+'ui-monospace,monospace';ctx.textAlign='center';
+    let lastLabelX=-1e9;
+    RATIOS.forEach(R=>{const x=X(R.r);
+      ctx.strokeStyle='#141428';ctx.beginPath();ctx.moveTo(x,padT-10);ctx.lineTo(x,H-padB);ctx.stroke();
+      if(x-lastLabelX>=30){ctx.fillStyle='#55557a';ctx.fillText(R.n,x,H-padB+18);lastLabelX=x;}
+    });
+    // eje base
+    ctx.strokeStyle='#23233e';ctx.lineWidth=1.5;ctx.beginPath();
+    ctx.moveTo(padL,H-padB);ctx.lineTo(W-padR,H-padB);ctx.stroke();
+
+    // área + curva
+    ctx.beginPath();ctx.moveTo(X(RMIN),H-padB);
+    for(let i=0;i<SAMP;i++){const r=RMIN+(RMAX-RMIN)*i/(SAMP-1);ctx.lineTo(X(r),Y(curve[i]));}
+    ctx.lineTo(X(RMAX),H-padB);ctx.closePath();
+    const grad=ctx.createLinearGradient(0,padT,0,H-padB);
+    grad.addColorStop(0,'rgba(155,107,255,0.28)');grad.addColorStop(1,'rgba(155,107,255,0.02)');
+    ctx.fillStyle=grad;ctx.fill();
+
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(let pass=0;pass<2;pass++){
+      ctx.beginPath();
+      for(let i=0;i<SAMP;i++){const r=RMIN+(RMAX-RMIN)*i/(SAMP-1);const x=X(r),y=Y(curve[i]);
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+      ctx.strokeStyle=pass?'rgba(170,150,255,0.95)':'rgba(120,90,255,0.18)';
+      ctx.lineWidth=pass?2:8;ctx.stroke();
+    }
+    ctx.restore();
+
+    // mínimos (valles consonantes)
+    minima.forEach(mn=>{const x=X(mn.r),y=Y(curve[mn.i]);
+      ctx.fillStyle='#3ee8d0';ctx.shadowColor='#3ee8d0';ctx.shadowBlur=10;
+      ctx.beginPath();ctx.arc(x,y,4,0,7);ctx.fill();ctx.shadowBlur=0;
+      ctx.fillStyle='#3ee8d0';ctx.font='700 12px ui-monospace,monospace';ctx.textAlign='center';
+      ctx.fillText(mn.name,x,y-12);
+    });
+
+    // cursor
+    const cx=X(cursorR),cy=Y(dissAt(cursorR));
+    ctx.strokeStyle='rgba(255,77,157,0.5)';ctx.lineWidth=1.5;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(cx,padT-10);ctx.lineTo(cx,H-padB);ctx.stroke();ctx.setLineDash([]);
+    ctx.fillStyle='#ff4d9d';ctx.shadowColor='#ff4d9d';ctx.shadowBlur=14;
+    ctx.beginPath();ctx.arc(cx,cy,6,0,7);ctx.fill();ctx.shadowBlur=0;
+
+    // readout
+    let near=null,bc=1e9;RATIOS.forEach(R=>{const c=Math.abs(1200*Math.log2(cursorR/R.r));if(c<bc){bc=c;near=R;}});
+    document.getElementById('read').childNodes[0].nodeValue='ratio '+cursorR.toFixed(3);
+    document.getElementById('read').querySelector('small').textContent=
+      (bc<25?`≈ ${near.n} (${bc.toFixed(0)}¢)`:'intervalo intermedio')+
+      `  ·  f₂ ${(f0*cursorR).toFixed(0)} Hz`;
+  }
+  resize();requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>05 · Cymatics / Chladni — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    padding:14px 18px;z-index:5;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .val{font:700 15px var(--mono);color:var(--yl);min-width:22px;text-align:center}
+  .sep{width:1px;height:24px;background:#23233e}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim)}
+  .readout b{color:var(--cy)}
+  @media(max-width:620px){.readout{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">05 · CYMATICS · CHLADNI</h1>
+  <span class="sub">la arena dibuja las líneas nodales</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="panel">
+  <div class="grp"><span class="lbl">n</span>
+    <span class="chip" data-d="n-1">−</span><span class="val" id="nval">4</span><span class="chip" data-d="n+1">+</span></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">m</span>
+    <span class="chip" data-d="m-1">−</span><span class="val" id="mval">3</span><span class="chip" data-d="m+1">+</span></div>
+  <div class="sep"></div>
+  <span class="chip" id="rand">⤮ aleatorio</span>
+  <span class="chip" id="sound">▶ sonar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  let n=4, m=3;
+  const SIDE=720, COUNT=12000, BASE=0.05, EPS=0.0009;
+
+  // buffer de simulación (independiente del dpr)
+  const buf=document.createElement('canvas'); buf.width=SIDE;buf.height=SIDE;
+  const bc=buf.getContext('2d'); bc.fillStyle='#06060d'; bc.fillRect(0,0,SIDE,SIDE);
+
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  let W,H,dpr,sq,ox,oy;
+  function resize(){dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    sq=Math.min(W,H)*0.82; ox=(W-sq)/2; oy=(H-sq)/2;}
+  window.addEventListener('resize',resize);
+
+  // partículas
+  const px=new Float32Array(COUNT), py=new Float32Array(COUNT);
+  for(let i=0;i<COUNT;i++){px[i]=Math.random();py[i]=Math.random();}
+  function reseed(){for(let i=0;i<COUNT;i++){px[i]=Math.random();py[i]=Math.random();}}
+
+  function amp(x,y){ // |modo de placa cuadrada|
+    return Math.abs( Math.sin(n*Math.PI*x)*Math.sin(m*Math.PI*y)
+                   + Math.sin(m*Math.PI*x)*Math.sin(n*Math.PI*y) );
+  }
+
+  // ---------- audio ----------
+  let actx=null,osc=null,gain=null,playing=false;
+  function eigenFreq(){return 55*Math.sqrt(n*n+m*m);}
+  function toggleSound(){
+    if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    playing=!playing;
+    if(playing){gain=actx.createGain();gain.gain.value=0;gain.connect(actx.destination);
+      osc=actx.createOscillator();osc.type='sine';osc.frequency.value=eigenFreq();
+      osc.connect(gain);osc.start();gain.gain.setTargetAtTime(0.12,actx.currentTime,0.05);}
+    else{gain.gain.setTargetAtTime(0,actx.currentTime,0.05);const o=osc;setTimeout(()=>{try{o.stop()}catch(e){}},300);osc=null;}
+    document.getElementById('sound').classList.toggle('on',playing);
+    document.getElementById('sound').textContent=playing?'⏸ sonando':'▶ sonar';
+  }
+  function retune(){if(osc)osc.frequency.setTargetAtTime(eigenFreq(),actx.currentTime,0.04);}
+
+  // ---------- render ----------
+  function step(){
+    // desvanecido (deja rastro)
+    bc.globalCompositeOperation='source-over';
+    bc.fillStyle='rgba(6,6,13,0.14)'; bc.fillRect(0,0,SIDE,SIDE);
+    // mover partículas
+    for(let i=0;i<COUNT;i++){
+      const a=amp(px[i],py[i]);
+      const s=BASE*a+EPS;
+      px[i]+=(Math.random()*2-1)*s;
+      py[i]+=(Math.random()*2-1)*s;
+      if(px[i]<0)px[i]=-px[i]; else if(px[i]>1)px[i]=2-px[i];
+      if(py[i]<0)py[i]=-py[i]; else if(py[i]>1)py[i]=2-py[i];
+    }
+    // pintar
+    bc.globalCompositeOperation='lighter';
+    bc.beginPath();
+    for(let i=0;i<COUNT;i++){ bc.rect(px[i]*SIDE, py[i]*SIDE, 1.4, 1.4); }
+    bc.fillStyle='rgba(120,255,236,0.85)'; bc.fill();
+  }
+  function draw(){
+    requestAnimationFrame(draw);
+    step();
+    ctx.clearRect(0,0,W,H);
+    // marco de la placa
+    ctx.strokeStyle='#15152a';ctx.lineWidth=1.5;ctx.strokeRect(ox-1,oy-1,sq+2,sq+2);
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(buf,ox,oy,sq,sq);
+    document.getElementById('readout').innerHTML=
+      `modo <b>(${n}, ${m})</b><br>${COUNT.toLocaleString('es')} granos<br>f ≈ <b>${eigenFreq().toFixed(0)}</b> Hz`;
+  }
+
+  // ---------- UI ----------
+  function setNM(nn,mm){ n=Math.max(1,Math.min(9,nn)); m=Math.max(1,Math.min(9,mm));
+    document.getElementById('nval').textContent=n;document.getElementById('mval').textContent=m;
+    bc.globalCompositeOperation='source-over';bc.fillStyle='#06060d';bc.fillRect(0,0,SIDE,SIDE);
+    reseed(); retune(); }
+  document.querySelectorAll('[data-d]').forEach(el=>el.onclick=()=>{
+    const d=el.dataset.d;
+    if(d==='n-1')setNM(n-1,m); if(d==='n+1')setNM(n+1,m);
+    if(d==='m-1')setNM(n,m-1); if(d==='m+1')setNM(n,m+1);
+  });
+  document.getElementById('rand').onclick=()=>{
+    let a=1+Math.floor(Math.random()*8), b=1+Math.floor(Math.random()*8);
+    if(a===b)b=(b%8)+1; setNM(a,b);
+  };
+  document.getElementById('sound').onclick=toggleSound;
+
+  resize();requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>04 · Serie armónica — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .controls{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:#0c0c18cc;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none;backdrop-filter:blur(6px)}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--yl);border-color:var(--yl);font-weight:700}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  input[type=range]{width:110px;accent-color:var(--pu)}
+  .bars{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;gap:6px;
+    padding:12px 14px;overflow-x:auto;background:linear-gradient(0deg,#0a0a16ee,#0a0a1600);
+    backdrop-filter:blur(4px)}
+  .bar{flex:0 0 auto;width:62px;border:1px solid #23233e;border-radius:10px;padding:8px 6px;
+    text-align:center;cursor:pointer;transition:.12s;background:#0c0c18}
+  .bar:hover{border-color:#46466a}
+  .bar.sel{border-color:var(--cy);box-shadow:0 0 14px #3ee8d055}
+  .bar .h{font:700 16px var(--mono);color:var(--txt)}
+  .bar .r{font:600 10px var(--mono);color:var(--cy)}
+  .bar .nt{font:600 12px var(--mono);color:var(--yl);margin-top:3px}
+  .bar .ct{font:500 10px var(--mono);color:var(--dim)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">04 · SERIE ARMÓNICA</h1>
+  <span class="sub">una cuerda y sus sobretonos</span>
+  <div class="controls">
+    <span class="lbl">f₀</span>
+    <input type="range" id="base" min="55" max="220" value="110" step="1">
+    <span class="chip" id="add">▶ timbre aditivo</span>
+  </div>
+</div>
+<div class="bars" id="bars"></div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const N=16;
+  let f0=110, sel=1, additive=false;
+
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  let W,H,dpr;
+  function resize(){dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);}
+  window.addEventListener('resize',resize);
+
+  function noteInfo(freq){
+    const midi=69+12*Math.log2(freq/440);
+    const near=Math.round(midi);
+    const cents=Math.round((midi-near)*100);
+    const nm=NOTE[((near%12)+12)%12]+(Math.floor(near/12)-1);
+    return {nm,cents};
+  }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();return actx;}
+  function playHarmonic(n){
+    const a=ctxOn(),t=a.currentTime,dur=0.8;
+    const o=a.createOscillator(),g=a.createGain();
+    o.type='sine';o.frequency.value=f0*n;o.connect(g).connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.25,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t);o.stop(t+dur);
+  }
+  let addOsc=null,addGain=null;
+  function buildWave(a){
+    const real=new Float32Array(N+1), imag=new Float32Array(N+1);
+    for(let n=1;n<=N;n++) imag[n]=1/n;           // ~diente de sierra
+    return a.createPeriodicWave(real,imag,{disableNormalization:false});
+  }
+  function toggleAdd(){
+    const a=ctxOn();
+    additive=!additive;
+    if(additive){
+      addGain=a.createGain();addGain.gain.value=0;addGain.connect(a.destination);
+      addOsc=a.createOscillator();addOsc.setPeriodicWave(buildWave(a));
+      addOsc.frequency.value=f0;addOsc.connect(addGain);addOsc.start();
+      addGain.gain.setTargetAtTime(0.16,a.currentTime,0.05);
+    }else{
+      addGain.gain.setTargetAtTime(0,a.currentTime,0.05);
+      const o=addOsc;setTimeout(()=>{try{o.stop()}catch(e){}},300);
+      addOsc=null;
+    }
+    document.getElementById('add').classList.toggle('on',additive);
+    document.getElementById('add').textContent=additive?'⏸ timbre sonando':'▶ timbre aditivo';
+  }
+
+  // ---------- barras ----------
+  const barsEl=document.getElementById('bars'); let barEls=[];
+  function buildBars(){
+    barsEl.innerHTML='';barEls=[];
+    for(let n=1;n<=N;n++){
+      const inf=noteInfo(f0*n);
+      const d=document.createElement('div');
+      d.className='bar'+(n===sel?' sel':'');
+      d.innerHTML=`<div class="h">${n}</div><div class="r">×${n}</div>`+
+        `<div class="nt">${inf.nm}</div><div class="ct">${inf.cents>=0?'+':''}${inf.cents}¢</div>`;
+      d.onclick=()=>{sel=n;playHarmonic(n);markSel();};
+      barsEl.appendChild(d);barEls.push(d);
+    }
+  }
+  function markSel(){barEls.forEach((d,i)=>d.classList.toggle('sel',i+1===sel));}
+
+  document.getElementById('base').oninput=e=>{f0=+e.target.value;buildBars();
+    if(addOsc)addOsc.frequency.setTargetAtTime(f0,actx.currentTime,0.03);};
+  document.getElementById('add').onclick=toggleAdd;
+
+  // ---------- render ----------
+  function draw(now){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    const t=now/1000;
+    const padX=Math.max(40,W*0.08), x0=padX, x1=W-padX, len=x1-x0;
+    const yMid=H*0.40, amp=Math.min(H*0.20,150);
+
+    // nodos/vientres guía
+    ctx.strokeStyle='#14142a';ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(x0,yMid);ctx.lineTo(x1,yMid);ctx.stroke();
+
+    // cuerda
+    const steps=600;
+    function yAt(xn){ // xn en [0,1]
+      if(additive){ let s=0; for(let n=1;n<=N;n++) s+=(1/n)*Math.sin(n*Math.PI*xn)*Math.cos(2*Math.PI*n*0.25*t);
+        return s/1.4; }
+      return Math.sin(sel*Math.PI*xn)*Math.cos(2*Math.PI*sel*0.35*t);
+    }
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    for(let pass=0;pass<2;pass++){
+      ctx.beginPath();
+      for(let i=0;i<=steps;i++){const xn=i/steps;const x=x0+xn*len;const y=yMid-yAt(xn)*amp;
+        i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+      ctx.strokeStyle=pass?'rgba(160,255,240,0.95)':'rgba(62,232,208,0.16)';
+      ctx.lineWidth=pass?2:9;ctx.stroke();
+    }
+    // extremos fijos
+    [x0,x1].forEach(x=>{ctx.fillStyle='#ff4d9d';ctx.beginPath();ctx.arc(x,yMid,5,0,7);ctx.fill();});
+    ctx.restore();
+
+    // texto del modo
+    ctx.fillStyle='#e9ff5a';ctx.font='700 15px '+'ui-monospace,monospace';ctx.textAlign='center';
+    const inf=noteInfo(f0*sel);
+    ctx.fillText(additive
+      ? `timbre aditivo · ${N} armónicos (amplitud 1/n) sobre ${f0} Hz`
+      : `armónico ${sel} · ${(f0*sel).toFixed(1)} Hz · ${inf.nm} (${inf.cents>=0?'+':''}${inf.cents}¢) · ${sel} vientre${sel>1?'s':''}`,
+      W/2, yMid+amp+46);
+  }
+
+  resize();buildBars();requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
