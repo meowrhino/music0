@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>12 · Tonnetz toroidal — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .controls{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:#0c0c18cc;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none;backdrop-filter:blur(6px)}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .chip.plr{min-width:34px;text-align:center;font-weight:800}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  .name{position:fixed;left:18px;bottom:18px;z-index:5;font:700 22px/1 var(--mono)}
+  .name small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:6px;max-width:320px}
+  .legend{position:fixed;right:18px;bottom:18px;z-index:5;font:500 11px/1.9 var(--mono);text-align:right;color:var(--dim)}
+  .legend i{font-style:normal}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">12 · TONNETZ TOROIDAL</h1>
+  <span class="sub">la retícula envuelta en un toro (3×4)</span>
+  <div class="controls">
+    <span class="lbl">PLR</span>
+    <span class="chip plr" id="btnP">P</span>
+    <span class="chip plr" id="btnL">L</span>
+    <span class="chip plr" id="btnR">R</span>
+    <span class="sep"></span>
+    <span class="chip" id="btnPlay">▶ tríada</span>
+    <span class="chip on" id="btnAuto">↻ auto</span>
+  </div>
+</div>
+<div class="name" id="name">C mayor<small>arrastra para girar · P/L/R mueve la tríada por el toro · clic en un nodo para oírlo</small></div>
+<div class="legend">
+  <i style="color:var(--cy)">— quinta</i><br>
+  <i style="color:var(--mg)">— 3ª mayor</i><br>
+  <i style="color:var(--pu)">— 3ª menor</i>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  const TAU=Math.PI*2;
+  const Rg=1.0, rg=0.46;                 // radios mayor/menor del toro
+  const COL={ fifth:[62,232,208], maj3:[255,77,157], min3:[155,107,255] };
+
+  // ---------- nodos (12 clases de altura en malla 3x4) y aristas ----------
+  // pc(i,j) = (4i + 3j) mod 12 ; +i = 3ª mayor (período 3), +j = 3ª menor (período 4), diagonal = quinta
+  const NODES=[], pcToIJ={};
+  for(let i=0;i<3;i++) for(let j=0;j<4;j++){
+    const pc=((4*i+3*j)%12+12)%12;
+    NODES.push({i,j,pc,u:TAU*i/3,v:TAU*j/4});
+    pcToIJ[pc]={i,j};
+  }
+  const EDGES=[];
+  for(let i=0;i<3;i++) for(let j=0;j<4;j++){
+    const u=TAU*i/3, v=TAU*j/4;
+    EDGES.push({u1:u,v1:v,u2:TAU*(i+1)/3,v2:v,           col:COL.maj3});  // 3ª mayor
+    EDGES.push({u1:u,v1:v,u2:u,           v2:TAU*(j+1)/4, col:COL.min3}); // 3ª menor
+    EDGES.push({u1:u,v1:v,u2:TAU*(i+1)/3, v2:TAU*(j+1)/4, col:COL.fifth});// quinta (diagonal)
+  }
+
+  function torus(u,v){
+    const cu=Math.cos(u), su=Math.sin(u), cv=Math.cos(v), sv=Math.sin(v);
+    return [ (Rg+rg*cv)*cu, (Rg+rg*cv)*su, rg*sv ];
+  }
+
+  // ---------- cámara / proyección 3D manual ----------
+  let rotX=0.62, rotY=0.0, autoY=0, auto=true;
+  const FOV=3.4;
+  let W,H,dpr,cx,cy,scale;
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2;cy=H/2; scale=Math.min(W,H)*0.30;
+  }
+  addEventListener('resize',resize);
+  function proj(p){
+    const yaw=rotY+autoY, cyaw=Math.cos(yaw), syaw=Math.sin(yaw);
+    let x1=p[0]*cyaw + p[2]*syaw, z1=-p[0]*syaw + p[2]*cyaw, y1=p[1];
+    const cp=Math.cos(rotX), sp=Math.sin(rotX);
+    let y2=y1*cp - z1*sp, z2=y1*sp + z1*cp, x2=x1;
+    const persp=FOV/(FOV - z2);
+    return { x:cx + x2*persp*scale, y:cy + y2*persp*scale, z:z2, persp };
+  }
+  function alphaZ(z){ return Math.max(0.1, Math.min(1, 0.18 + 0.82*((z+1.5)/3))); }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playPcs(pcs){
+    const a=ctxOn(),t=a.currentTime,dur=1.1;
+    const g=a.createGain();g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    pcs.forEach(p=>{const o=a.createOscillator();o.type='triangle';o.frequency.value=freq(60+p);
+      o.connect(g);o.start(t);o.stop(t+dur);});
+  }
+
+  // ---------- tríada actual + PLR ----------
+  let current={root:0,major:true}, pulseT=-9;
+  function curPcs(){ const n=current.root;
+    return current.major?[n,(n+4)%12,(n+7)%12]:[n,(n+3)%12,(n+7)%12]; }
+  function curName(){ return NOTE[current.root]+(current.major?' mayor':' menor'); }
+  function curVerts(){ const b=pcToIJ[current.root], i=b.i, j=b.j;
+    return current.major ? [[i,j],[i+1,j],[i+1,j+1]] : [[i,j],[i,j+1],[i+1,j+1]]; }
+  function playCurrent(){ playPcs(curPcs()); pulseT=performance.now(); }
+  function plr(op){
+    let n;
+    if(op==='P') n={root:current.root,major:!current.major};
+    else if(op==='R') n=current.major?{root:(current.root+9)%12,major:false}:{root:(current.root+3)%12,major:true};
+    else n=current.major?{root:(current.root+4)%12,major:false}:{root:(current.root+8)%12,major:true};
+    current=n; playCurrent();
+  }
+
+  // ---------- render ----------
+  function drawSurface(){
+    const NU=24, NV=16;
+    ctx.strokeStyle='rgba(90,90,160,0.09)'; ctx.lineWidth=1;
+    for(let a=0;a<NU;a++){ const u=TAU*a/NU; ctx.beginPath();
+      for(let b=0;b<=NV;b++){ const p=proj(torus(u,TAU*b/NV)); b?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); } ctx.stroke(); }
+    for(let b=0;b<NV;b++){ const v=TAU*b/NV; ctx.beginPath();
+      for(let a=0;a<=NU;a++){ const p=proj(torus(TAU*a/NU,v)); a?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y); } ctx.stroke(); }
+  }
+  function drawNet(){
+    const segs=[];
+    for(const e of EDGES){
+      const pts=[]; let zs=0; const N=20;
+      for(let s=0;s<=N;s++){ const t=s/N;
+        const p=proj(torus(e.u1+(e.u2-e.u1)*t, e.v1+(e.v2-e.v1)*t)); pts.push(p); zs+=p.z; }
+      segs.push({pts, z:zs/(N+1), col:e.col});
+    }
+    segs.sort((a,b)=>a.z-b.z);
+    for(const sg of segs){ const al=alphaZ(sg.z), c=sg.col;
+      ctx.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},${al*0.85})`;
+      ctx.lineWidth=(0.6+0.9*al)* (0.5+0.5*((sg.z+1.5)/3)) +0.6;
+      ctx.beginPath(); sg.pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+    }
+  }
+  function drawFace(now){
+    const vs=curVerts().map(([i,j])=>proj(torus(TAU*i/3,TAU*j/4)));
+    const pulse=Math.max(0,1-(now-pulseT)/450);
+    const base=current.major?[62,232,208]:[255,77,157];
+    ctx.beginPath();ctx.moveTo(vs[0].x,vs[0].y);ctx.lineTo(vs[1].x,vs[1].y);ctx.lineTo(vs[2].x,vs[2].y);ctx.closePath();
+    ctx.fillStyle=`rgba(${base[0]},${base[1]},${base[2]},${0.18+0.4*pulse})`; ctx.fill();
+    ctx.strokeStyle=`rgba(${base[0]},${base[1]},${base[2]},0.9)`; ctx.lineWidth=2; ctx.stroke();
+  }
+  function drawNodes(){
+    const cur=new Set(curPcs());
+    const arr=NODES.map(nd=>({nd, p:proj(torus(nd.u,nd.v))}));
+    arr.sort((a,b)=>a.p.z-b.p.z);
+    for(const o of arr){ const nd=o.nd, p=o.p, hue=nd.pc*30, inCur=cur.has(nd.pc), al=alphaZ(p.z);
+      const rr=(inCur?9:6.5)*p.persp;
+      if(inCur){ ctx.shadowColor=`hsl(${hue},85%,62%)`; ctx.shadowBlur=16; }
+      ctx.beginPath();ctx.arc(p.x,p.y,rr,0,7);
+      ctx.fillStyle=inCur?`hsla(${hue},88%,62%,${al})`:`hsla(${hue},58%,52%,${al*0.92})`;
+      ctx.fill(); ctx.shadowBlur=0;
+      ctx.fillStyle=`rgba(${inCur?'6,6,13':'240,240,255'},${al})`;
+      ctx.font=`700 ${Math.round(11*p.persp)}px ${MONO}`; ctx.textAlign='center';ctx.textBaseline='middle';
+      ctx.fillText(NOTE[nd.pc],p.x,p.y);
+    }
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(auto && !dragging) autoY += 0.0016;
+    ctx.clearRect(0,0,W,H);
+    drawSurface();
+    drawNet();
+    drawFace(now);
+    drawNodes();
+    const el=document.getElementById('name');
+    el.childNodes[0].nodeValue=curName();
+    el.querySelector('small').textContent = curPcs().map(p=>NOTE[p]).join(' · ')+'  ·  arrastra para girar';
+  }
+
+  // ---------- interacción ----------
+  let dragging=false, moved=0, lx=0, ly=0;
+  cv.addEventListener('pointerdown',e=>{ dragging=true;moved=0;lx=e.clientX;ly=e.clientY;
+    cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove',e=>{ if(!dragging)return;
+    const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX;ly=e.clientY; moved+=Math.abs(dx)+Math.abs(dy);
+    rotY+=dx*0.008; rotX=Math.max(-1.45,Math.min(1.45,rotX+dy*0.008)); });
+  cv.addEventListener('pointerup',e=>{ dragging=false; cv.classList.remove('drag');
+    if(moved<5) pick(e); });
+  function pick(e){
+    const r=cv.getBoundingClientRect(), mx=e.clientX-r.left, my=e.clientY-r.top;
+    let best=null,bd=24;
+    NODES.forEach(nd=>{ const p=proj(torus(nd.u,nd.v)); const d=Math.hypot(p.x-mx,p.y-my);
+      if(d<bd){ bd=d; best=nd; } });
+    if(best){ playPcs([best.pc]); }
+  }
+  document.getElementById('btnP').onclick=()=>plr('P');
+  document.getElementById('btnL').onclick=()=>plr('L');
+  document.getElementById('btnR').onclick=()=>plr('R');
+  document.getElementById('btnPlay').onclick=playCurrent;
+  document.getElementById('btnAuto').onclick=function(){ auto=!auto; this.classList.toggle('on',auto); };
+  addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+    if(k==='p')plr('P'); else if(k==='l')plr('L'); else if(k==='r')plr('R'); });
+
+  resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

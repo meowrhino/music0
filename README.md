@@ -20,7 +20,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (11 piezas, agrupadas por categoría)
+## Las pruebas (12 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -32,6 +32,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 02 | [Círculo cromático](pruebas/02-circulo-cromatico.html) | Acordes como polígonos; presets, raíz y orden cromático↔quintas. | 1 | 8/6 |
 | 03 | [Tonnetz](pruebas/03-tonnetz.html) | Retícula de tríadas; ▲ mayor / ▼ menor; hover + clic para sonar. | 4 | 9/9 |
 | 11 | [Tonnetz+](pruebas/11-tonnetz-midi.html) | Transformaciones PLR + Web MIDI + estela de conducción de voces (atajos P/L/R). | 4 | 9/9 |
+| 12 | [Tonnetz toroidal](pruebas/12-tonnetz-toro.html) | La retícula envuelta en un toro 3D navegable (Z₁₂ ≅ Z₃×Z₄). Gira + PLR. | 4 | 9/10 |
 
 **II · Frecuencia, ratios y afinación**
 
@@ -59,8 +60,8 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 ## Rumbos posibles (la "web loquita")
 
 - **A · Galería + navegador** ✦ *(aquí vivimos)* — mini-experimentos autónomos + este `index.html`.
-- **B · Showpiece profundo** ◐ *(empezado)* — el **Tonnetz+** (PLR + Web MIDI) es la primera pieza
-  profunda; siguiente paso: Tonnetz toroidal 3D u orbifold de Tymoczko.
+- **B · Showpiece profundo** ◐ *(en marcha)* — el **Tonnetz+** (PLR + Web MIDI) y el **Tonnetz
+  toroidal 3D** ya son piezas profundas; siguiente paso: orbifold de Tymoczko (Möbius de díadas).
 - **C · Ensayo explorable** ◐ *(empezado)* — la portada agrupada por categoría es el primer paso hacia
   un scrollytelling con widgets incrustados (modelo osar.fr).
 - **D · Playground audiovisual en vivo** — un instrumento: tocas notas/MIDI y varias visualizaciones
@@ -69,7 +70,6 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 
 ## Ideas para el siguiente lote
 
-- Tonnetz **toroidal 3D** (el showpiece): envolver la retícula en un toro navegable.
 - **Color como capa compartida**: teñir el círculo cromático y el Tonnetz con el mapa de Scriabin.
 - **Orbifold de Tymoczko**: cinta de Möbius del espacio de díadas (geometría de la conducción de voces).
 - **Modo D**: un teclado en pantalla / Web MIDI que dispara a la vez Tonnetz + chroma + cymatics.
@@ -93,7 +93,8 @@ music0/
     ├── 08-mandala-fft.html
     ├── 09-helice-shepard.html
     ├── 10-lattice-ji.html
-    └── 11-tonnetz-midi.html
+    ├── 11-tonnetz-midi.html
+    └── 12-tonnetz-toro.html
 ```
 
 ## Stack
