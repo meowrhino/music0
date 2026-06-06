@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>09 · Hélice de Shepard — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:130px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:42px;text-align:right}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">09 · HÉLICE DE SHEPARD</h1>
+  <span class="sub">un tono que sube (o baja) para siempre</span>
+</div>
+<div class="panel">
+  <span class="chip" id="play">▶ iniciar</span>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">dirección</span>
+    <span class="chip on" id="up">sube</span>
+    <span class="chip" id="down">baja</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">velocidad</span>
+    <input type="range" id="speed" min="2" max="60" value="14" step="1">
+    <span class="val" id="speedVal">14</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+
+  // ---------- parámetros de síntesis ----------
+  const K=8;                 // número de parciales (octavas)
+  const FMIN=27.5;           // A0 — frecuencia del parcial 0 cuando p=0
+  const FCENTER=660;         // centro espectral fijo (Hz)
+  const SIGMA=1.0;           // ancho de la campana, en octavas
+  const LOG_C=Math.log2(FCENTER);
+
+  let p=0;                   // fase global, en octavas (avanza con el tiempo)
+  let playing=false;
+  let dir=1;                 // +1 sube, -1 baja
+  let secsPerOctave=14;      // tiempo en recorrer una octava (slider invertido más adelante)
+
+  // ---------- audio ----------
+  let actx=null, master=null;
+  const oscs=[], gains=[];
+
+  function buildAudio(){
+    if(actx) return;
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    master=actx.createGain();
+    master.gain.value=0.0;
+    master.connect(actx.destination);
+    for(let i=0;i<K;i++){
+      const o=actx.createOscillator();
+      const g=actx.createGain();
+      o.type="sine";
+      g.gain.value=0;
+      o.connect(g).connect(master);
+      o.frequency.value=FMIN*Math.pow(2,i);
+      o.start();
+      oscs.push(o); gains.push(g);
+    }
+  }
+
+  // amplitud de envolvente (gaussiana sobre log2 de la frecuencia)
+  function envAmp(f){
+    const d=Math.log2(f)-LOG_C;
+    return Math.exp(-(d*d)/(2*SIGMA*SIGMA));
+  }
+
+  // estado por parcial reutilizado en cada frame
+  function partialFreq(i){ return FMIN*Math.pow(2,p+i); }
+
+  function updateAudio(dt){
+    if(!playing||!actx) return;
+    // avanzar fase: una octava cada secsPerOctave segundos
+    p += (dir*dt)/secsPerOctave;
+    // envolver para reciclar de forma perceptualmente continua
+    if(p>=1) p-=1;
+    if(p<0)  p+=1;
+
+    const t=actx.currentTime;
+    const tc=0.03; // constante de tiempo corta para evitar clicks
+    let sum=0;
+    const amps=new Array(K);
+    for(let i=0;i<K;i++){
+      const f=partialFreq(i);
+      const a=envAmp(f);
+      amps[i]=a; sum+=a;
+    }
+    if(sum<=0) sum=1;
+    for(let i=0;i<K;i++){
+      const f=partialFreq(i);
+      oscs[i].frequency.setTargetAtTime(f,t,tc);
+      // normaliza la suma de ganancias para evitar clipping
+      gains[i].gain.setTargetAtTime((amps[i]/sum)*0.9,t,tc);
+    }
+  }
+
+  function setPlaying(on){
+    buildAudio();
+    if(actx.state==="suspended") actx.resume();
+    playing=on;
+    const t=actx.currentTime;
+    master.gain.setTargetAtTime(on?0.5:0.0001,t,0.05);
+    const el=document.getElementById("play");
+    el.classList.toggle("on",on);
+    el.textContent=on?"⏸ sonando":"▶ iniciar";
+  }
+
+  // ---------- controles ----------
+  document.getElementById("play").addEventListener("click",()=>setPlaying(!playing));
+  const upEl=document.getElementById("up"), downEl=document.getElementById("down");
+  function setDir(d){
+    dir=d;
+    upEl.classList.toggle("on",d>0);
+    downEl.classList.toggle("on",d<0);
+  }
+  upEl.addEventListener("click",()=>setDir(1));
+  downEl.addEventListener("click",()=>setDir(-1));
+
+  const speedEl=document.getElementById("speed"), speedVal=document.getElementById("speedVal");
+  function applySpeed(){
+    const v=+speedEl.value;          // 2..60 -> "intensidad" de velocidad
+    speedVal.textContent=v;
+    // más alto en el slider = más rápido => menos segundos por octava
+    secsPerOctave=62-v;              // v=60 -> ~2s/oct ; v=2 -> 60s/oct
+  }
+  speedEl.addEventListener("input",applySpeed);
+  applySpeed();
+
+  // ---------- canvas ----------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  let W,H,dpr;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize",resize);
+
+  // mapeo de croma (0..12) a color del arco iris neón
+  function chromaColor(c,alpha){
+    const h=(c/12)*360;
+    return `hsla(${h},85%,62%,${alpha})`;
+  }
+
+  // ---------- render de la hélice ----------
+  // Cilindro vertical: ángulo = clase de altura (croma), altura vertical = octava.
+  // La hélice se desplaza lentamente hacia abajo para transmitir la subida sin fin.
+  let last=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=last? Math.min((now-last)/1000,0.05):0;
+    last=now;
+
+    updateAudio(dt);
+
+    ctx.clearRect(0,0,W,H);
+
+    const cx=W/2, cy=H/2;
+    const R=Math.min(W,H)*0.26;            // radio del cilindro
+    const turns=4;                          // vueltas visibles de la espiral
+    const vGap=Math.min(H,720)*0.085;       // separación vertical por octava
+
+    // fase de pitch continua: tono total = p (más alto = más agudo).
+    // Para la animación, posición vertical/rotación se derivan de la misma fase.
+    const phase=p;                          // 0..1 dentro de la octava actual
+
+    // rotación global de la hélice (gira para reforzar el movimiento)
+    const rot=phase*2*Math.PI*dir;
+
+    // construir puntos de la espiral a lo largo de varias octavas
+    const N=turns*120;
+    const pts=[];
+    for(let k=0;k<=N;k++){
+      const u=k/120;                        // u en octavas a lo largo de la espiral
+      // croma continuo: la espiral progresa de croma al subir
+      const chroma=(u*12);
+      const theta=2*Math.PI*(chroma/12)+rot;
+      const x=cx+R*Math.cos(theta);
+      const depth=Math.sin(theta);          // -1 detrás .. +1 delante
+      // altura: octava más alta arriba. La fase desplaza todo hacia abajo
+      // (sube el tono -> la espiral parece descender para no salirse).
+      const yOct=(u - turns/2 - phase*dir);
+      const y=cy - yOct*vGap;
+      pts.push({x,y,depth,chroma:((chroma%12)+12)%12,theta});
+    }
+
+    // línea base (cilindro) tenue
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.lineWidth=1;
+    ctx.strokeStyle="rgba(90,169,255,0.10)";
+    ctx.beginPath();
+    ctx.ellipse(cx,cy,R,R*0.18,0,0,2*Math.PI);
+    ctx.stroke();
+    ctx.restore();
+
+    // dibujar la espiral: primero trazos traseros, luego delanteros (orden por profundidad)
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let pass=0;pass<2;pass++){
+      // pass 0: detrás (depth<0), pass 1: delante (depth>=0)
+      ctx.beginPath();
+      let started=false;
+      for(let k=0;k<pts.length;k++){
+        const pt=pts[k];
+        const front=pt.depth>=0;
+        if((pass===0&&!front)||(pass===1&&front)){
+          if(!started){ctx.moveTo(pt.x,pt.y);started=true;}
+          else ctx.lineTo(pt.x,pt.y);
+        } else {
+          started=false;
+        }
+      }
+      ctx.lineWidth=pass?3.2:1.6;
+      ctx.strokeStyle=pass?"rgba(62,232,208,0.55)":"rgba(62,232,208,0.14)";
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // puntos sobre la espiral, color por croma, brillo y tamaño por envolvente + profundidad
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let k=0;k<pts.length;k+=2){
+      const pt=pts[k];
+      // peso visual: delante = más brillante y grande, detrás = más tenue
+      const front=(pt.depth+1)/2;            // 0..1
+      const a=0.10+front*0.5;
+      const r=1.6+front*3.2;
+      ctx.fillStyle=chromaColor(pt.chroma,a);
+      ctx.beginPath();
+      ctx.arc(pt.x,pt.y,r,0,2*Math.PI);
+      ctx.fill();
+    }
+    ctx.restore();
+
+    // clase de altura actual (la más sonora según la envolvente)
+    // El parcial dominante es el más cercano a FCENTER en log; su croma:
+    let bestI=0,bestA=-1;
+    for(let i=0;i<K;i++){
+      const f=FMIN*Math.pow(2,p+i);
+      const a=envAmp(f);
+      if(a>bestA){bestA=a;bestI=i;}
+    }
+    const fDom=FMIN*Math.pow(2,p+bestI);
+    const midiDom=69+12*Math.log2(fDom/440);
+    const chromaDom=((Math.round(midiDom)%12)+12)%12;
+    const nombre=NOTAS[chromaDom];
+
+    // marcador giratorio del croma dominante: punto grande recorriendo la espiral
+    const thetaDom=2*Math.PI*((p*12)/12)+rot; // se mueve con la fase
+    const markX=cx+R*Math.cos(thetaDom);
+    const markFront=(Math.sin(thetaDom)+1)/2;
+    const markY=cy - (-phase*dir)*vGap;       // cerca del centro
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    const glow=ctx.createRadialGradient(markX,markY,0,markX,markY,26);
+    glow.addColorStop(0,chromaColor(chromaDom,0.9));
+    glow.addColorStop(1,chromaColor(chromaDom,0));
+    ctx.fillStyle=glow;
+    ctx.beginPath();ctx.arc(markX,markY,26,0,2*Math.PI);ctx.fill();
+    ctx.fillStyle=chromaColor(chromaDom,0.95);
+    ctx.beginPath();ctx.arc(markX,markY,4+markFront*3,0,2*Math.PI);ctx.fill();
+    ctx.restore();
+
+    // textos
+    ctx.font="700 44px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center";
+    ctx.fillStyle=playing?chromaColor(chromaDom,1):"#3a3a55";
+    ctx.fillText(nombre, cx, cy+R*0.18+58);
+
+    ctx.font="500 12px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#7e7ea0";
+    ctx.fillText(
+      playing
+        ? `clase de altura dominante · centro fijo ${FCENTER} Hz · ${K} parciales por octava`
+        : "pulsa ▶ para escuchar la ilusión de Risset-Shepard",
+      cx, cy+R*0.18+86);
+
+    // mini-espectro de parciales abajo a la izquierda
+    drawSpectrum();
+  }
+
+  function drawSpectrum(){
+    const x0=22, y0=H-150, w=150, h=92;
+    ctx.save();
+    ctx.fillStyle="rgba(12,12,24,0.55)";
+    ctx.strokeStyle="#20203a";
+    ctx.lineWidth=1;
+    roundRect(x0-10,y0-22,w+20,h+34,12);
+    ctx.fill();ctx.stroke();
+    ctx.fillStyle="#7e7ea0";
+    ctx.font="600 10px ui-monospace,monospace";
+    ctx.textAlign="left";
+    ctx.fillText("ENVOLVENTE ESPECTRAL", x0-4, y0-8);
+
+    ctx.globalCompositeOperation="lighter";
+    // curva de la campana gaussiana sobre el eje log-frecuencia
+    const fLo=FMIN, fHi=FMIN*Math.pow(2,K);
+    const lLo=Math.log2(fLo), lHi=Math.log2(fHi);
+    ctx.beginPath();
+    for(let i=0;i<=w;i++){
+      const lf=lLo+(i/w)*(lHi-lLo);
+      const a=envAmp(Math.pow(2,lf));
+      const yy=y0+h-a*h;
+      i?ctx.lineTo(x0+i,yy):ctx.moveTo(x0+i,yy);
+    }
+    ctx.strokeStyle="rgba(155,107,255,0.6)";
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+
+    // parciales actuales como barras
+    for(let i=0;i<K;i++){
+      const f=FMIN*Math.pow(2,p+i);
+      if(f<fLo||f>fHi) continue;
+      const a=envAmp(f);
+      const px=x0+((Math.log2(f)-lLo)/(lHi-lLo))*w;
+      const ph=a*h;
+      const midi=69+12*Math.log2(f/440);
+      const cr=((Math.round(midi)%12)+12)%12;
+      ctx.strokeStyle=chromaColor(cr,0.7+a*0.3);
+      ctx.lineWidth=2.4;
+      ctx.beginPath();ctx.moveTo(px,y0+h);ctx.lineTo(px,y0+h-ph);ctx.stroke();
+      ctx.fillStyle=chromaColor(cr,0.5+a*0.5);
+      ctx.beginPath();ctx.arc(px,y0+h-ph,2.4,0,2*Math.PI);ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.beginPath();
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

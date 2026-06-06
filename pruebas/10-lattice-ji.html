@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>10 · Lattice de entonación justa — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+  /* extensiones mínimas */
+  .readout{position:fixed;left:18px;bottom:78px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim);max-width:300px;pointer-events:none}
+  .readout b{color:var(--cy);font-size:20px;display:inline-block} .readout .dev{color:var(--mg)} .readout .ok{color:var(--yl)}
+  .legend{position:fixed;right:18px;bottom:78px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);text-align:right;pointer-events:none}
+  .legend i{color:var(--bl);font-style:normal}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">10 · LATTICE DE ENTONACIÓN JUSTA</h1>
+  <span class="sub">retícula 5-límite · quintas × terceras</span>
+</div>
+
+<div class="readout" id="readout">
+  haz clic en un nodo<br>
+  <span style="color:#56567a">→ quinta justa (3/2) · ↑ tercera mayor justa (5/4)</span>
+</div>
+<div class="legend">
+  base <b style="color:var(--yl)">220 Hz</b> = 1/1<br>
+  color = <i>clase de altura</i><br>
+  desviación vs 12-TET en cents
+</div>
+
+<div class="panel">
+  <button class="chip" id="btnAudio">▶ activar sonido</button>
+  <div class="sep"></div>
+  <button class="chip" id="btnJusta">tríada mayor justa</button>
+  <div class="grp">
+    <span class="lbl">comparar</span>
+    <button class="chip" id="btnTET">justa / temperada</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const MONO="ui-monospace,Menlo,Consolas,monospace";
+  const BASE=220;                    // Hz del 1/1
+  const A_MIN=-3, A_MAX=3;           // eje quintas (factor 3)
+  const B_MIN=-2, B_MAX=2;           // eje terceras (factor 5)
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,cx,cy,dx,dy,R;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;
+    cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2;
+    dx=Math.max(72,Math.min(150,(W-120)/(A_MAX-A_MIN)));
+    dy=Math.max(64,Math.min(130,(H-220)/(B_MAX-B_MIN)));
+    R=Math.max(20,Math.min(30,dx*0.22));
+  }
+  window.addEventListener('resize',resize);
+
+  // ---------- helpers musicales ----------
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+  function gcd(a,b){ a=Math.abs(a); b=Math.abs(b); while(b){ [a,b]=[b,a%b]; } return a||1; }
+
+  // ratio reducido a [1,2) y fracción entera para el nodo (a,b)
+  function nodeInfo(a,b){
+    // numerador/denominador a partir de 3^a · 5^b
+    let num=1, den=1;
+    if(a>=0) num*=Math.pow(3,a); else den*=Math.pow(3,-a);
+    if(b>=0) num*=Math.pow(5,b); else den*=Math.pow(5,-b);
+    // multiplicar por potencias de 2 hasta que num/den quede en [1,2)
+    while(num/den>=2) den*=2;
+    while(num/den<1)  num*=2;
+    const g=gcd(num,den); num/=g; den/=g;
+    const r=num/den;
+    const cents=1200*Math.log2(r);
+    const pc=((Math.round(12*Math.log2(r))%12)+12)%12;
+    // desviación respecto al 12-TET más cercano
+    const dev=cents-100*Math.round(cents/100);
+    return {a,b,num,den,r,cents,pc,dev};
+  }
+
+  // construir los nodos
+  const NODES=[];
+  for(let b=B_MAX;b>=B_MIN;b--)
+    for(let a=A_MIN;a<=A_MAX;a++)
+      NODES.push(nodeInfo(a,b));
+  function pos(n){ return { x: cx + n.a*dx, y: cy - n.b*dy }; }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ensureCtx(){
+    if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
+    return actx;
+  }
+  function tone(f,dur,when,type){
+    const a=actx, t=(when!=null?when:a.currentTime);
+    const o=a.createOscillator(), g=a.createGain();
+    o.type=type||'triangle'; o.frequency.value=f;
+    o.connect(g); g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.14,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+  function playNode(n){
+    ensureCtx();
+    tone(BASE*n.r,1.4);
+  }
+  function playRatios(ratios,dur){
+    ensureCtx();
+    const t=actx.currentTime;
+    ratios.forEach(r=>tone(BASE*r,dur,t));
+  }
+
+  // ---------- interacción ----------
+  let hover=null;      // índice de nodo bajo el ratón
+  let sel=null;        // nodo seleccionado (con clic)
+  let pulse=null, pulseT=0;
+  let mx=-1, my=-1;
+
+  function pick(px,py){
+    let best=null, bd=R+12;
+    for(let i=0;i<NODES.length;i++){
+      const p=pos(NODES[i]);
+      const d=Math.hypot(px-p.x,py-p.y);
+      if(d<bd){ bd=d; best=i; }
+    }
+    return best;
+  }
+
+  cv.addEventListener('mousemove',e=>{
+    const r=cv.getBoundingClientRect();
+    mx=e.clientX-r.left; my=e.clientY-r.top;
+    hover=pick(mx,my);
+    cv.style.cursor = hover!=null ? 'pointer' : 'crosshair';
+  });
+  cv.addEventListener('mouseleave',()=>{ hover=null; mx=my=-1; });
+  cv.addEventListener('click',e=>{
+    const r=cv.getBoundingClientRect();
+    const i=pick(e.clientX-r.left,e.clientY-r.top);
+    if(i==null) return;
+    sel=NODES[i]; playNode(sel);
+    pulse=sel; pulseT=performance.now();
+    updateReadout();
+  });
+
+  // ---------- controles ----------
+  const btnAudio=document.getElementById('btnAudio');
+  const btnJusta=document.getElementById('btnJusta');
+  const btnTET=document.getElementById('btnTET');
+  let tetMode=false;
+
+  btnAudio.addEventListener('click',()=>{
+    ensureCtx();
+    btnAudio.classList.add('on');
+    btnAudio.textContent='♪ sonido activo';
+    // pequeño 1/1 de confirmación
+    tone(BASE,0.5);
+  });
+
+  function playTriad(){
+    ensureCtx();
+    const dur=1.8;
+    if(tetMode){
+      // misma tríada mayor en 12-TET temperado
+      playRatios([1, Math.pow(2,4/12), Math.pow(2,7/12)], dur);
+    }else{
+      // tríada mayor justa: 1/1 · 5/4 · 3/2
+      playRatios([1, 1.25, 1.5], dur);
+    }
+    triadFlash=performance.now();
+  }
+  let triadFlash=-1e9;
+
+  btnJusta.addEventListener('click',()=>{
+    tetMode=false; btnTET.classList.remove('on');
+    btnTET.textContent='justa / temperada';
+    playTriad();
+  });
+  btnTET.addEventListener('click',()=>{
+    tetMode=!tetMode;
+    btnTET.classList.toggle('on',tetMode);
+    btnTET.textContent = tetMode ? 'temperada (12-TET) ◀' : 'justa / temperada';
+    playTriad();
+  });
+
+  // ---------- readout DOM ----------
+  function updateReadout(){
+    const el=document.getElementById('readout');
+    if(!sel){ return; }
+    const devTxt=(sel.dev>=0?'+':'')+sel.dev.toFixed(1)+' cents';
+    const devClass=Math.abs(sel.dev)<3?'ok':'dev';
+    el.innerHTML =
+      '<b>'+sel.num+'/'+sel.den+'</b><br>'+
+      'altura: '+NOTAS[sel.pc]+'<br>'+
+      (sel.cents).toFixed(1)+' cents<br>'+
+      'frecuencia: '+(BASE*sel.r).toFixed(1)+' Hz<br>'+
+      'desviación 12-TET: <span class="'+devClass+'">'+devTxt+'</span>';
+  }
+
+  // ---------- render ----------
+  function draw(now){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+
+    // aristas tenues (vecinos +a y +b)
+    ctx.strokeStyle='#181830'; ctx.lineWidth=1.2; ctx.beginPath();
+    for(const n of NODES){
+      const p=pos(n);
+      if(n.a<A_MAX){ const q=pos({a:n.a+1,b:n.b}); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); }
+      if(n.b<B_MAX){ const q=pos({a:n.a,b:n.b+1}); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y); }
+    }
+    ctx.stroke();
+
+    // resaltar tríada justa 1/1·5/4·3/2 cuando suena la demo justa
+    if(now-triadFlash<1600 && !tetMode){
+      const k=1-(now-triadFlash)/1600;
+      const triad=[ {a:0,b:0},{a:0,b:1},{a:1,b:0} ]; // 1/1, 5/4, 3/2
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle=`rgba(233,255,90,${0.5*k})`; ctx.lineWidth=2.5;
+      ctx.beginPath();
+      const a0=pos(triad[0]), a1=pos(triad[1]), a2=pos(triad[2]);
+      ctx.moveTo(a0.x,a0.y); ctx.lineTo(a1.x,a1.y);
+      ctx.moveTo(a0.x,a0.y); ctx.lineTo(a2.x,a2.y);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // nodos
+    for(let i=0;i<NODES.length;i++){
+      const n=NODES[i], p=pos(n), hue=n.pc*30;
+      const isHover = (i===hover);
+      const isSel = (sel && sel.a===n.a && sel.b===n.b);
+      const center = (n.a===0 && n.b===0);
+
+      // halo en hover/selección con brillo aditivo
+      if(isHover || isSel){
+        ctx.save();
+        ctx.globalCompositeOperation='lighter';
+        const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,R*2.4);
+        g.addColorStop(0,`hsla(${hue},90%,62%,${isSel?0.55:0.32})`);
+        g.addColorStop(1,'hsla('+hue+',90%,62%,0)');
+        ctx.fillStyle=g;
+        ctx.beginPath(); ctx.arc(p.x,p.y,R*2.4,0,Math.PI*2); ctx.fill();
+        ctx.restore();
+      }
+
+      // pulso de clic
+      if(pulse && pulse.a===n.a && pulse.b===n.b){
+        const k=(now-pulseT)/520;
+        if(k<1){
+          ctx.save();
+          ctx.globalCompositeOperation='lighter';
+          ctx.strokeStyle=`hsla(${hue},90%,65%,${(1-k)*0.8})`;
+          ctx.lineWidth=2.5;
+          ctx.beginPath(); ctx.arc(p.x,p.y,R+6+k*26,0,Math.PI*2); ctx.stroke();
+          ctx.restore();
+        } else pulse=null;
+      }
+
+      // disco del nodo
+      ctx.beginPath(); ctx.arc(p.x,p.y,R,0,Math.PI*2);
+      ctx.fillStyle = (isSel||isHover) ? `hsl(${hue} 80% 56%)` : '#0c0c18';
+      ctx.fill();
+      ctx.lineWidth = center?2.4:1.6;
+      ctx.strokeStyle = `hsl(${hue} ${(isSel||isHover)?85:46}% ${(isSel||isHover)?70:48}%)`;
+      ctx.stroke();
+
+      // etiqueta fracción
+      ctx.fillStyle = (isSel||isHover) ? '#06060d' : '#c8c8e6';
+      ctx.font='700 12px '+MONO; ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(n.num+'/'+n.den, p.x, p.y-3);
+      // cents pequeños
+      ctx.fillStyle = (isSel||isHover) ? '#1a1a2a' : '#5c5c80';
+      ctx.font='600 9px '+MONO;
+      ctx.fillText(Math.round(n.cents)+'¢', p.x, p.y+10);
+    }
+
+    // tooltip de hover flotante junto al ratón
+    if(hover!=null){
+      const n=NODES[hover];
+      const p=pos(n);
+      const txt=NOTAS[n.pc]+'  '+n.num+'/'+n.den;
+      ctx.font='600 11px '+MONO;
+      const wpx=ctx.measureText(txt).width+16;
+      const tx=p.x+R+10, ty=p.y-R-10;
+      ctx.fillStyle='#0c0c18ee';
+      ctx.strokeStyle='#2a2a44'; ctx.lineWidth=1;
+      ctx.beginPath();
+      ctx.roundRect ? ctx.roundRect(tx,ty,wpx,22,6) : ctx.rect(tx,ty,wpx,22);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle='#3ee8d0'; ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(txt,tx+8,ty+11);
+    }
+  }
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

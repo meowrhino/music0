@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>11 · Tonnetz+ (PLR · MIDI) — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .controls{margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:#0c0c18cc;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none;backdrop-filter:blur(6px)}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.plr{min-width:34px;text-align:center;font-weight:800}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  .name{position:fixed;left:18px;bottom:18px;z-index:5;font:700 22px/1 var(--mono)}
+  .name small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:6px;max-width:320px}
+  .legend{position:fixed;right:18px;bottom:18px;z-index:5;font:500 11px/1.8 var(--mono);color:var(--dim);text-align:right}
+  .legend b{color:var(--cy)} .legend i{color:var(--mg);font-style:normal}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">11 · TONNETZ+</h1>
+  <span class="sub">PLR neo-riemanniano · Web MIDI</span>
+  <div class="controls">
+    <span class="lbl">PLR</span>
+    <span class="chip plr" id="btnP">P</span>
+    <span class="chip plr" id="btnL">L</span>
+    <span class="chip plr" id="btnR">R</span>
+    <span class="sep"></span>
+    <span class="chip" id="btnMidi">🎹 conectar MIDI</span>
+  </div>
+</div>
+<div class="name" id="name">C mayor<small>P/L/R transforma la tríada al triángulo vecino. Pasa el ratón o conecta un teclado MIDI.</small></div>
+<div class="legend"><b>▲ mayor</b> &nbsp; <i>▼ menor</i></div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,S,cx,cy;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2;cy=H/2;S=Math.max(56,Math.min(92,Math.min(W,H)/8));
+  }
+  addEventListener('resize',resize);
+
+  const K=Math.sqrt(3)/2;
+  function P(a,b){ return { x: cx + a*S + b*S/2, y: cy - b*S*K }; }
+  function pc(a,b){ return ((7*a + 4*b)%12 + 12)%12; }
+  function triObj(i,j,major){
+    let verts,root,pcs;
+    if(major){ verts=[[i,j],[i+1,j],[i,j+1]]; root=pc(i,j); pcs=[root,(root+4)%12,(root+7)%12]; }
+    else { verts=[[i+1,j],[i,j+1],[i+1,j+1]]; const v=pc(i,j); root=(v+4)%12; pcs=[root,(root+3)%12,(root+7)%12]; }
+    const ps=verts.map(p=>P(p[0],p[1]));
+    return { i,j,major,root,pcs,verts,ps,
+      cxp:(ps[0].x+ps[1].x+ps[2].x)/3, cyp:(ps[0].y+ps[1].y+ps[2].y)/3,
+      name: NOTE[root]+(major?' mayor':' menor') };
+  }
+  function triAt(mx,my){
+    const b=-(my-cy)/(S*K), a=((mx-cx)-b*S/2)/S;
+    const i=Math.floor(a), j=Math.floor(b), fa=a-i, fb=b-j;
+    return triObj(i,j, fa+fb<1);
+  }
+  function visRange(){
+    const bHi=Math.ceil((cy+S)/(S*K))+1, bLo=Math.floor((cy-H-S)/(S*K))-1;
+    return {bLo,bHi};
+  }
+  function aRange(b){ return { aLo:Math.floor((-S-cx-b*S/2)/S)-1, aHi:Math.ceil((W+S-cx-b*S/2)/S)+1 }; }
+  // triángulo visible que coincide con {root,major}, el más cercano a lastC (continuidad)
+  function findTri(q){
+    const {bLo,bHi}=visRange(); let best=null,bd=1e18;
+    for(let j=bLo;j<=bHi;j++){ const {aLo,aHi}=aRange(j);
+      for(let i=aLo;i<=aHi;i++){ const t=triObj(i,j,q.major);
+        if(t.root!==q.root) continue;
+        const d=(t.cxp-lastC.x)**2+(t.cyp-lastC.y)**2; if(d<bd){bd=d;best=t;}
+      }}
+    return best;
+  }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(m){ return 440*Math.pow(2,(m-69)/12); }
+  function playPcs(pcs){
+    const a=ctxOn(),t=a.currentTime,dur=1.1;
+    const g=a.createGain();g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    pcs.forEach(p=>{const o=a.createOscillator();o.type='triangle';o.frequency.value=freq(60+p);
+      o.connect(g);o.start(t);o.stop(t+dur);});
+  }
+
+  // ---------- estado ----------
+  let current={root:0,major:true};
+  let lastC={x:0,y:0};
+  let trail=[];
+  let hover=null, pulse=null, pulseT=0;
+  let activePcs=new Set();
+  let midiStatus='MIDI: sin conectar';
+
+  function setCurrent(tri,playIt){
+    current={root:tri.root,major:tri.major};
+    lastC={x:tri.cxp,y:tri.cyp};
+    trail.push({x:tri.cxp,y:tri.cyp}); if(trail.length>10)trail.shift();
+    if(playIt){ playPcs(tri.pcs); pulse=tri; pulseT=performance.now(); }
+  }
+  function plr(op){
+    let n;
+    if(op==='P') n={root:current.root,major:!current.major};
+    else if(op==='R') n=current.major?{root:(current.root+9)%12,major:false}:{root:(current.root+3)%12,major:true};
+    else n=current.major?{root:(current.root+4)%12,major:false}:{root:(current.root+8)%12,major:true};
+    current=n; const tri=findTri(n); if(tri) setCurrent(tri,true);
+  }
+
+  // ---------- MIDI ----------
+  function detectTriad(){
+    for(const r of activePcs){
+      if(activePcs.has((r+4)%12)&&activePcs.has((r+7)%12)) return {root:r,major:true};
+      if(activePcs.has((r+3)%12)&&activePcs.has((r+7)%12)) return {root:r,major:false};
+    }
+    return null;
+  }
+  function onMIDI(e){
+    const d=e.data, cmd=d[0]&0xf0; ctxOn();
+    if(cmd===0x90 && d[2]>0) activePcs.add(d[1]%12);
+    else if(cmd===0x80 || (cmd===0x90&&d[2]===0)) activePcs.delete(d[1]%12);
+    const tr=detectTriad(); if(tr){ const t=findTri(tr); if(t) setCurrent(t,false); }
+  }
+  function connectMIDI(){
+    if(!navigator.requestMIDIAccess){ midiStatus='MIDI: no soportado por el navegador'; return; }
+    navigator.requestMIDIAccess().then(acc=>{
+      const bind=()=>acc.inputs.forEach(i=>i.onmidimessage=onMIDI);
+      bind(); acc.onstatechange=bind;
+      let any=false; acc.inputs.forEach(()=>any=true);
+      midiStatus=any?'MIDI: conectado ✓':'MIDI: conecta un teclado';
+    }).catch(()=>{ midiStatus='MIDI: acceso denegado'; });
+  }
+
+  // ---------- render ----------
+  function fillTri(t,fill){
+    ctx.beginPath();ctx.moveTo(t.ps[0].x,t.ps[0].y);
+    ctx.lineTo(t.ps[1].x,t.ps[1].y);ctx.lineTo(t.ps[2].x,t.ps[2].y);ctx.closePath();
+    ctx.fillStyle=fill;ctx.fill();
+  }
+  function draw(now){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    const {bLo,bHi}=visRange();
+
+    // aristas
+    ctx.strokeStyle='#1a1a32';ctx.lineWidth=1.2;ctx.beginPath();
+    for(let b=bLo;b<=bHi;b++){ const {aLo,aHi}=aRange(b);
+      for(let a=aLo;a<=aHi;a++){ const p=P(a,b),e1=P(a+1,b),e2=P(a,b+1),e3=P(a+1,b-1);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e1.x,e1.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e2.x,e2.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e3.x,e3.y); }}
+    ctx.stroke();
+
+    const cur=findTri(current);
+    if(cur) fillTri(cur, cur.major?'rgba(62,232,208,0.20)':'rgba(255,77,157,0.20)');
+    if(hover) fillTri(hover, hover.major?'rgba(62,232,208,0.12)':'rgba(255,77,157,0.12)');
+    if(pulse){ const k=(now-pulseT)/420;
+      if(k<1) fillTri(pulse,(pulse.major?'rgba(62,232,208,':'rgba(255,77,157,')+((1-k)*0.4)+')');
+      else pulse=null; }
+
+    // estela de voice-leading
+    if(trail.length>1){
+      ctx.strokeStyle='rgba(233,255,90,0.55)';ctx.lineWidth=2;ctx.beginPath();
+      trail.forEach((c,i)=> i?ctx.lineTo(c.x,c.y):ctx.moveTo(c.x,c.y)); ctx.stroke();
+      trail.forEach((c,i)=>{ ctx.fillStyle='rgba(233,255,90,'+(0.18+0.6*i/trail.length)+')';
+        ctx.beginPath();ctx.arc(c.x,c.y,3,0,7);ctx.fill(); });
+    }
+
+    // nodos
+    for(let b=bLo;b<=bHi;b++){ const {aLo,aHi}=aRange(b);
+      for(let a=aLo;a<=aHi;a++){ const p=P(a,b), n=pc(a,b), hue=n*30;
+        const inCur = cur && cur.verts.some(v=>v[0]===a&&v[1]===b);
+        const active = activePcs.has(n);
+        ctx.beginPath();ctx.arc(p.x,p.y, inCur||active?15:12, 0,7);
+        ctx.fillStyle = inCur?`hsl(${hue} 85% 62%)`:'#0c0c18'; ctx.fill();
+        ctx.lineWidth = active?3:1.5;
+        ctx.strokeStyle = active?'#e9ff5a':`hsl(${hue} ${inCur?80:38}% ${inCur?70:44}%)`; ctx.stroke();
+        ctx.fillStyle = inCur?'#06060d':'#9a9ac0';
+        ctx.font='600 12px '+MONO;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(NOTE[n],p.x,p.y); }}
+
+    const el=document.getElementById('name');
+    const shown=hover||cur;
+    el.childNodes[0].nodeValue = shown?shown.name:'—';
+    el.querySelector('small').textContent =
+      (shown?shown.pcs.map(p=>NOTE[p]).join(' · '):'') + '   ·   ' + midiStatus;
+  }
+
+  // ---------- interacción ----------
+  cv.addEventListener('mousemove',e=>{const r=cv.getBoundingClientRect();
+    hover=triAt(e.clientX-r.left,e.clientY-r.top);});
+  cv.addEventListener('mouseleave',()=>hover=null);
+  cv.addEventListener('click',e=>{const r=cv.getBoundingClientRect();
+    setCurrent(triAt(e.clientX-r.left,e.clientY-r.top),true);});
+  document.getElementById('btnP').onclick=()=>plr('P');
+  document.getElementById('btnL').onclick=()=>plr('L');
+  document.getElementById('btnR').onclick=()=>plr('R');
+  document.getElementById('btnMidi').onclick=connectMIDI;
+  addEventListener('keydown',e=>{const k=e.key.toLowerCase();
+    if(k==='p')plr('P'); else if(k==='l')plr('L'); else if(k==='r')plr('R');});
+
+  resize();
+  lastC={x:cx,y:cy};
+  const c0=findTri(current); if(c0){ lastC={x:c0.cxp,y:c0.cyp}; trail=[{x:c0.cxp,y:c0.cyp}]; }
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

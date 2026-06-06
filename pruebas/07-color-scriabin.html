@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>07 · Color ↔ Nota (Scriabin) — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:pointer}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;
+    flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;
+    border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;
+    flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);
+    padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg)}
+  .foot{position:fixed;left:18px;bottom:14px;z-index:5;max-width:min(420px,52vw);
+    font:400 10px/1.45 var(--mono);color:var(--dim);pointer-events:none}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">07 · COLOR ↔ NOTA (SCRIABIN)</h1>
+  <span class="sub">círculo de quintas teñido de luz</span>
+</div>
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">paleta</span>
+    <span class="chip on" id="mScria">Scriabin</span>
+    <span class="chip" id="mSyn">sinestesia</span>
+  </div>
+  <div class="sep"></div>
+  <span class="chip" id="stop">silencio</span>
+</div>
+<div class="foot">
+  Colores de Scriabin publicados por L. Sabaneyev (1911). El modo «sinestesia» usa un
+  mapeo continuo croma→tono basado en datos promediados de investigación sobre sinestesia.
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // Círculo de quintas desde C arriba, horario.
+  const ORDEN=[0,7,2,9,4,11,6,1,8,3,10,5]; // clases de altura por sector
+  const ETIQ =["C","G","D","A","E","B","F#","C#","G#","D#","A#","F"];
+
+  // Colores de Scriabin (Sabaneyev 1911), indexados por clase de altura (pc).
+  const SCRIABIN={
+    0:{hex:"#FF0000", nm:"rojo"},
+    7:{hex:"#FF7A00", nm:"naranja-rosa"},
+    2:{hex:"#FFFF00", nm:"amarillo"},
+    9:{hex:"#2ECC40", nm:"verde"},
+    4:{hex:"#87CEEB", nm:"azul cielo"},
+    11:{hex:"#BFD7FF", nm:"azul nacarado"},
+    6:{hex:"#3A6BFF", nm:"azul"},
+    1:{hex:"#8A2BE2", nm:"violeta"},
+    8:{hex:"#B23AC6", nm:"púrpura-violeta"},
+    3:{hex:"#6E7B8B", nm:"acero metálico"},
+    10:{hex:"#8FA1B3", nm:"acero rosado"},
+    5:{hex:"#8B0000", nm:"rojo oscuro"}
+  };
+
+  // Sinestesia: mapeo continuo croma->tono. hue = pc/12*360, do=0=rojo, si=violeta.
+  function synHsl(pc){ return "hsl("+(pc/12*360)+" 85% 55%)"; }
+  function synName(pc){
+    const nombres=["rojo","rojo-naranja","naranja","ámbar","amarillo","verde-lima",
+      "verde","verde-azulado","cian","azul","índigo","violeta"];
+    return nombres[pc];
+  }
+
+  let modo="scriabin";  // "scriabin" | "syn"
+  let sel=-1;           // sector seleccionado (índice 0..11), -1 = ninguno
+  let glow=0;           // pulso de glow del sector seleccionado
+
+  function colorOf(pc){ return modo==="scriabin" ? SCRIABIN[pc].hex : synHsl(pc); }
+  function nameOf(pc){ return modo==="scriabin" ? SCRIABIN[pc].nm : synName(pc); }
+
+  // ---------- canvas ----------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  let W,H,dpr,cx,cy,Ro,Ri;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2;
+    Ro=Math.min(W,H)*0.40;       // radio exterior
+    Ri=Ro*0.52;                  // radio interior (donut)
+  }
+  window.addEventListener("resize",resize);
+
+  const TAU=Math.PI*2;
+  const STEP=TAU/12;
+  // El sector i ocupa el ángulo centrado en (-PI/2 + i*STEP), medido desde arriba horario.
+  function sectorCenterAngle(i){ return -Math.PI/2 + i*STEP; }
+
+  // ---------- audio ----------
+  let actx=null, master=null;
+  function ensureCtx(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      master=actx.createGain();
+      master.gain.value=0.9;
+      master.connect(actx.destination);
+    }
+    if(actx.state==="suspended") actx.resume();
+    return actx;
+  }
+  function playTriad(rootPc){
+    const a=ensureCtx(), t=a.currentTime, dur=1.1;
+    const semis=[0,4,7]; // tríada mayor: raíz, +4, +7
+    const g=a.createGain(); g.connect(master);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.20/Math.sqrt(semis.length),t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    semis.forEach(s=>{
+      const midi=60+rootPc+s; // raíz en la octava de C4
+      const o=a.createOscillator();
+      o.type="triangle";
+      o.frequency.value=freq(midi);
+      o.connect(g); o.start(t); o.stop(t+dur);
+    });
+  }
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    glow*=0.93;
+
+    // sectores
+    for(let i=0;i<12;i++){
+      const pc=ORDEN[i];
+      const a0=sectorCenterAngle(i)-STEP/2;
+      const a1=sectorCenterAngle(i)+STEP/2;
+      const isSel=(i===sel);
+      const col=colorOf(pc);
+
+      // relleno del sector (donut)
+      ctx.beginPath();
+      ctx.arc(cx,cy,Ro,a0,a1);
+      ctx.arc(cx,cy,Ri,a1,a0,true);
+      ctx.closePath();
+      ctx.fillStyle=col;
+      ctx.globalAlpha=isSel?1:0.86;
+      ctx.fill();
+      ctx.globalAlpha=1;
+
+      // separador entre sectores
+      ctx.strokeStyle="#06060d";
+      ctx.lineWidth=2;
+      ctx.stroke();
+    }
+
+    // glow del sector seleccionado (capa aditiva)
+    if(sel>=0){
+      const pc=ORDEN[sel];
+      const a0=sectorCenterAngle(sel)-STEP/2;
+      const a1=sectorCenterAngle(sel)+STEP/2;
+      const col=colorOf(pc);
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      const pulse=0.35+0.45*glow;
+      ctx.beginPath();
+      ctx.arc(cx,cy,Ro,a0,a1);
+      ctx.arc(cx,cy,Ri,a1,a0,true);
+      ctx.closePath();
+      ctx.globalAlpha=pulse;
+      ctx.shadowColor=col; ctx.shadowBlur=30+40*glow;
+      ctx.fillStyle=col;
+      ctx.fill();
+      ctx.restore();
+
+      // borde brillante
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx,cy,Ro,a0,a1);
+      ctx.arc(cx,cy,Ri,a1,a0,true);
+      ctx.closePath();
+      ctx.strokeStyle="#ffffff";
+      ctx.lineWidth=2.5;
+      ctx.shadowColor=col; ctx.shadowBlur=18;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // etiquetas de nota en cada sector
+    const Rlab=(Ro+Ri)/2;
+    ctx.font="700 13px "+getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    for(let i=0;i<12;i++){
+      const ang=sectorCenterAngle(i);
+      const lx=cx+Rlab*Math.cos(ang), ly=cy+Rlab*Math.sin(ang);
+      // contraste: texto oscuro con halo claro
+      ctx.fillStyle="rgba(6,6,13,0.92)";
+      ctx.lineWidth=3;
+      ctx.strokeStyle="rgba(255,255,255,0.55)";
+      ctx.strokeText(ETIQ[i],lx,ly);
+      ctx.fillText(ETIQ[i],lx,ly);
+    }
+
+    // centro: info de la tonalidad seleccionada
+    drawCenter();
+  }
+
+  function drawCenter(){
+    // disco central de fondo
+    ctx.beginPath();
+    ctx.arc(cx,cy,Ri-4,0,TAU);
+    ctx.fillStyle="#06060d";
+    ctx.fill();
+    ctx.strokeStyle="#20203a";
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+
+    ctx.textAlign="center";
+    if(sel<0){
+      ctx.fillStyle=getComputedStyle(document.body).getPropertyValue("--dim");
+      ctx.font="600 14px "+getComputedStyle(document.body).getPropertyValue("--mono");
+      ctx.textBaseline="middle";
+      ctx.fillText("toca un sector",cx,cy-8);
+      ctx.font="500 11px "+getComputedStyle(document.body).getPropertyValue("--mono");
+      ctx.fillText("círculo de quintas",cx,cy+14);
+      return;
+    }
+    const pc=ORDEN[sel];
+    const col=colorOf(pc);
+    const ton=ETIQ[sel];
+    const triadPcs=[pc,(pc+4)%12,(pc+7)%12];
+    const triadNames=triadPcs.map(p=>NOTAS[p]).join(" · ");
+
+    // nombre de la tonalidad EN GRANDE, con su color y glow aditivo
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.shadowColor=col; ctx.shadowBlur=24;
+    ctx.fillStyle=col;
+    ctx.font="700 "+Math.round(Ri*0.62)+"px "+getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.textBaseline="middle";
+    ctx.fillText(ton,cx,cy-Ri*0.12);
+    ctx.restore();
+
+    // nombre del color
+    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue("--txt");
+    ctx.font="600 13px "+getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.textBaseline="middle";
+    ctx.fillText(nameOf(pc),cx,cy+Ri*0.30);
+
+    // notas de la tríada mayor
+    ctx.fillStyle=getComputedStyle(document.body).getPropertyValue("--dim");
+    ctx.font="500 12px "+getComputedStyle(document.body).getPropertyValue("--mono");
+    ctx.fillText("tríada mayor: "+triadNames,cx,cy+Ri*0.52);
+  }
+
+  // ---------- interacción (hit-test por ángulo) ----------
+  function hit(e){
+    const r=cv.getBoundingClientRect();
+    const mx=e.clientX-r.left, my=e.clientY-r.top;
+    const dx=mx-cx, dy=my-cy;
+    const dist=Math.hypot(dx,dy);
+    if(dist<Ri || dist>Ro*1.12) return; // fuera del donut (disco central/exterior)
+    let ang=Math.atan2(dy,dx);              // -PI..PI, 0 = derecha
+    // pasar a ángulo desde arriba (-PI/2) y normalizar a 0..TAU horario
+    let rel=ang - (-Math.PI/2);
+    rel=((rel % TAU)+TAU)%TAU;
+    const i=Math.round(rel/STEP)%12;        // sector centrado
+    sel=i;
+    glow=1;
+    playTriad(ORDEN[i]);
+  }
+  cv.addEventListener("pointerdown",hit);
+
+  // ---------- UI ----------
+  const bScria=document.getElementById("mScria");
+  const bSyn=document.getElementById("mSyn");
+  function setModo(m){
+    modo=m;
+    bScria.classList.toggle("on",m==="scriabin");
+    bSyn.classList.toggle("on",m==="syn");
+  }
+  bScria.addEventListener("click",()=>{ ensureCtx(); setModo("scriabin"); });
+  bSyn.addEventListener("click",()=>{ ensureCtx(); setModo("syn"); });
+  document.getElementById("stop").addEventListener("click",()=>{
+    sel=-1; glow=0;
+    if(actx && actx.state==="running"){ /* notas se autoextinguen; solo deselecciona */ }
+  });
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

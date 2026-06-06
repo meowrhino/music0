@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>08 · Mandala FFT (audio-reactivo) — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg)}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim)}
+  .readout b{color:var(--cy)}
+  .msg{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:7;
+    font:600 12px/1.4 var(--mono);color:var(--mg);background:#0c0c18ee;border:1px solid #3a2030;
+    border-radius:10px;padding:8px 12px;max-width:80vw;text-align:center;opacity:0;
+    transition:opacity .3s;pointer-events:none}
+  .msg.show{opacity:1}
+  @media(max-width:620px){.readout{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">08 · MANDALA FFT (AUDIO-REACTIVO)</h1>
+  <span class="sub">el espectro dibuja la simetría</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="msg" id="msg"></div>
+<div class="panel">
+  <span class="chip" id="sound">▶ sonar</span>
+  <span class="chip" id="mic">🎤 micrófono</span>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">simetría</span>
+    <span class="chip sym" data-n="6">6</span>
+    <span class="chip sym" data-n="8">8</span>
+    <span class="chip sym on" data-n="12">12</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- helpers ----------
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+
+  // ---------- canvas + dpr ----------
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  let W,H,dpr;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;
+    cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    // limpia a negro para que el rastro empiece limpio tras resize
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='#06060d';ctx.fillRect(0,0,W,H);
+  }
+  window.addEventListener('resize',resize);
+
+  // ---------- audio ----------
+  let actx=null, analyser=null, freqData=null;
+  let masterGain=null, internalGain=null;
+  let internalOn=false, micOn=false, micStream=null, micSource=null;
+  let voices=[]; // osciladores activos del pad interno
+  let chordTimer=0, chordIdx=0;
+
+  // progresión de acordes (grados MIDI). Tonalidad cálida y evolutiva.
+  // i - VI - III - VII (estilo modal, suena hipnótico en bucle)
+  const ROOT=48; // C3
+  const PROG=[
+    [0,3,7,10,14],   // Cm9
+    [-4,3,8,12,15],  // Ab maj
+    [-9,3,7,10,15],  // Eb add
+    [-2,1,5,8,12]    // Bb-ish
+  ];
+  const CHORD_MS=3400;
+
+  function ensureCtx(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      masterGain=actx.createGain();
+      masterGain.gain.value=0.9;
+      analyser=actx.createAnalyser();
+      analyser.fftSize=2048;
+      analyser.smoothingTimeConstant=0.78;
+      freqData=new Uint8Array(analyser.frequencyBinCount);
+      // master -> analyser -> destino (altavoces)
+      masterGain.connect(analyser);
+      analyser.connect(actx.destination);
+    }
+    if(actx.state==='suspended')actx.resume();
+  }
+
+  // construye un acorde como banco de osciladores con envolvente suave
+  function playChord(notes){
+    // libera voces previas
+    const old=voices; voices=[];
+    const t=actx.currentTime;
+    old.forEach(v=>{
+      try{v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(v.g.gain.value,t);
+        v.g.gain.linearRampToValueAtTime(0,t+0.9);
+        v.o.stop(t+1.0);
+      }catch(e){}
+    });
+    notes.forEach((semi,i)=>{
+      const midi=ROOT+semi;
+      const f=freq(midi);
+      // dos osciladores ligeramente desafinados por nota = pad cálido
+      [0,+0.12].forEach((det,k)=>{
+        const o=actx.createOscillator();
+        o.type = k===0 ? 'triangle' : 'sine';
+        o.frequency.value=f;
+        o.detune.value=det*12 + (Math.random()*6-3);
+        const g=actx.createGain();
+        g.gain.value=0;
+        o.connect(g); g.connect(internalGain);
+        const peak=(0.16/notes.length)*(k===0?1:0.6);
+        const at=0.6+i*0.05;       // ataque suave escalonado
+        o.start(t);
+        g.gain.setValueAtTime(0,t);
+        g.gain.linearRampToValueAtTime(peak,t+at);
+        voices.push({o,g});
+      });
+    });
+  }
+
+  function startInternal(){
+    ensureCtx();
+    internalOn=true;
+    if(!internalGain){
+      internalGain=actx.createGain();
+      internalGain.gain.value=0;
+      internalGain.connect(masterGain);
+    }
+    internalGain.gain.cancelScheduledValues(actx.currentTime);
+    internalGain.gain.setTargetAtTime(1.0,actx.currentTime,0.4);
+    chordIdx=0; chordTimer=performance.now();
+    playChord(PROG[0]);
+  }
+  function stopInternal(){
+    internalOn=false;
+    if(internalGain)internalGain.gain.setTargetAtTime(0,actx.currentTime,0.3);
+    const old=voices; voices=[];
+    const t=actx?actx.currentTime:0;
+    old.forEach(v=>{try{v.g.gain.linearRampToValueAtTime(0,t+0.4);v.o.stop(t+0.5);}catch(e){}});
+  }
+  function tickChords(now){
+    if(!internalOn)return;
+    if(now-chordTimer>=CHORD_MS){
+      chordTimer=now;
+      chordIdx=(chordIdx+1)%PROG.length;
+      playChord(PROG[chordIdx]);
+    }
+  }
+
+  // ---------- micrófono ----------
+  async function toggleMic(){
+    ensureCtx();
+    const btn=document.getElementById('mic');
+    if(micOn){
+      // apagar mic
+      if(micSource)try{micSource.disconnect();}catch(e){}
+      if(micStream)micStream.getTracks().forEach(tr=>tr.stop());
+      micSource=null;micStream=null;micOn=false;
+      btn.classList.remove('on');btn.textContent='🎤 micrófono';
+      showMsg('micrófono apagado · audio interno');
+      return;
+    }
+    try{
+      micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+      micSource=actx.createMediaStreamSource(micStream);
+      // el mic alimenta SOLO el analizador (no a los altavoces, evita realimentación)
+      micSource.connect(analyser);
+      micOn=true;
+      btn.classList.add('on');btn.textContent='🎤 micrófono ✓';
+      showMsg('micrófono activo — el mandala reacciona a tu sonido');
+    }catch(err){
+      micOn=false;btn.classList.remove('on');btn.textContent='🎤 micrófono';
+      showMsg('no se pudo acceder al micrófono ('+(err&&err.name?err.name:'error')+') · sigue el audio interno');
+    }
+  }
+
+  let msgTimer=null;
+  function showMsg(txt){
+    const m=document.getElementById('msg');
+    m.textContent=txt;m.classList.add('show');
+    clearTimeout(msgTimer);
+    msgTimer=setTimeout(()=>m.classList.remove('show'),3600);
+  }
+
+  // ---------- bandas (graves / medios / agudos) ----------
+  // se calculan sobre los bins del FFT
+  let bands={low:0,mid:0,high:0,energy:0};
+  function computeBands(){
+    const n=freqData.length;
+    const loEnd=Math.floor(n*0.06);   // ~ graves
+    const miEnd=Math.floor(n*0.30);   // medios
+    // agudos = resto
+    let sL=0,sM=0,sH=0;
+    for(let i=0;i<loEnd;i++)sL+=freqData[i];
+    for(let i=loEnd;i<miEnd;i++)sM+=freqData[i];
+    for(let i=miEnd;i<n;i++)sH+=freqData[i];
+    const cL=loEnd, cM=miEnd-loEnd, cH=n-miEnd;
+    bands.low =(sL/cL)/255;
+    bands.mid =(sM/cM)/255;
+    bands.high=(sH/cH)/255;
+    bands.energy=(bands.low+bands.mid+bands.high)/3;
+  }
+
+  // ---------- mandala ----------
+  let N=12;                 // simetría (pétalos)
+  let rot=0;                // rotación global
+  const RING_BINS=128;      // nº de bins (agrupados) que forman un anillo
+  let groups=new Float32Array(RING_BINS);
+  let smoothR=0;            // radio base suavizado
+
+  function aggregateGroups(){
+    // toma la parte baja-media del espectro (más expresiva) y la agrupa
+    const useBins=Math.min(freqData.length, 512);
+    const per=Math.max(1,Math.floor(useBins/RING_BINS));
+    for(let g=0;g<RING_BINS;g++){
+      let s=0;
+      const a=g*per, b=Math.min(useBins,a+per);
+      for(let i=a;i<b;i++)s+=freqData[i];
+      groups[g]=(s/(b-a))/255;
+    }
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+
+    // motor de acordes interno
+    tickChords(now);
+
+    // datos de espectro
+    if(analyser){
+      analyser.getByteFrequencyData(freqData);
+      computeBands();
+      aggregateGroups();
+    }
+
+    // ---- rastro: negro semitransparente en vez de borrar ----
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='rgba(6,6,13,0.18)';
+    ctx.fillRect(0,0,W,H);
+
+    const cx=W/2, cy=H/2;
+    const minDim=Math.min(W,H);
+
+    // radio base modulado por graves; velocidad de giro por agudos; hue por medios
+    const tgtR=minDim*(0.10+bands.low*0.16);
+    smoothR+=(tgtR-smoothR)*0.10;
+    const baseR=smoothR;
+    const maxLen=minDim*0.40;
+    rot+=0.0015+bands.high*0.02;
+    const hueBase=(now*0.012 + bands.mid*200) % 360;
+
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineCap='round';
+
+    const step=(Math.PI*2)/N;
+
+    // recorre los grupos de bins; cada uno = un radio sobre un sector angular
+    for(let g=0;g<RING_BINS;g++){
+      const amp=groups[g];
+      if(amp<0.02)continue;
+      // ángulo del grupo dentro de un sector (0..step), para que la copia
+      // rotada N veces cubra el círculo completo
+      const sectorA=(g/RING_BINS)*step;
+      const len=amp*maxLen;
+      const r0=baseR;
+      const r1=baseR+len;
+      const hue=(hueBase + (g/RING_BINS)*160 + amp*120) % 360;
+      const light=38+amp*42;
+      const alpha=0.18+amp*0.55;
+      const lw=1+amp*3.4;
+
+      ctx.strokeStyle='hsla('+hue.toFixed(0)+',92%,'+light.toFixed(0)+'%,'+alpha.toFixed(3)+')';
+      ctx.lineWidth=lw;
+
+      // N copias rotadas + espejo de cada una = mandala simétrico
+      for(let k=0;k<N;k++){
+        const baseAng=rot + k*step + sectorA;
+        // original
+        line(cx,cy,baseAng,r0,r1);
+        // espejo dentro del sector (refleja sectorA respecto al eje del sector)
+        const mirrorAng=rot + k*step + (step-sectorA);
+        line(cx,cy,mirrorAng,r0,r1);
+      }
+
+      // puntos-flor brillantes en la punta para los grupos fuertes
+      if(amp>0.45){
+        ctx.fillStyle='hsla('+hue.toFixed(0)+',100%,'+(light+12).toFixed(0)+'%,'+(alpha*0.9).toFixed(3)+')';
+        for(let k=0;k<N;k++){
+          const baseAng=rot+k*step+sectorA;
+          dot(cx,cy,baseAng,r1,1.6+amp*3);
+          const mirrorAng=rot+k*step+(step-sectorA);
+          dot(cx,cy,mirrorAng,r1,1.6+amp*3);
+        }
+      }
+    }
+
+    // núcleo pulsante
+    const coreHue=(hueBase+180)%360;
+    const coreR=baseR*0.55+bands.energy*minDim*0.05;
+    const grad=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.max(1,coreR));
+    grad.addColorStop(0,'hsla('+coreHue.toFixed(0)+',95%,70%,'+(0.30+bands.energy*0.5).toFixed(3)+')');
+    grad.addColorStop(1,'hsla('+coreHue.toFixed(0)+',95%,50%,0)');
+    ctx.fillStyle=grad;
+    ctx.beginPath();ctx.arc(cx,cy,Math.max(1,coreR),0,Math.PI*2);ctx.fill();
+
+    // readout
+    document.getElementById('readout').innerHTML=
+      'simetría <b>'+N+'</b> · fftSize <b>2048</b><br>'+
+      'graves <b>'+pct(bands.low)+'</b> · medios <b>'+pct(bands.mid)+'</b> · agudos <b>'+pct(bands.high)+'</b><br>'+
+      'fuente <b>'+(micOn?'micrófono':'audio interno')+'</b>';
+  }
+
+  function line(cx,cy,ang,r0,r1){
+    const c=Math.cos(ang), s=Math.sin(ang);
+    ctx.beginPath();
+    ctx.moveTo(cx+c*r0, cy+s*r0);
+    ctx.lineTo(cx+c*r1, cy+s*r1);
+    ctx.stroke();
+  }
+  function dot(cx,cy,ang,r,rad){
+    const c=Math.cos(ang), s=Math.sin(ang);
+    ctx.beginPath();
+    ctx.arc(cx+c*r, cy+s*r, rad, 0, Math.PI*2);
+    ctx.fill();
+  }
+  function pct(v){return Math.round(v*100)+'%';}
+
+  // ---------- UI ----------
+  const btnSound=document.getElementById('sound');
+  btnSound.onclick=()=>{
+    ensureCtx(); // gesto del usuario: crea/reanuda contexto
+    if(!internalOn){
+      startInternal();
+      btnSound.classList.add('on');btnSound.textContent='⏸ sonando';
+    }else{
+      stopInternal();
+      btnSound.classList.remove('on');btnSound.textContent='▶ sonar';
+    }
+  };
+
+  document.getElementById('mic').onclick=toggleMic;
+
+  document.querySelectorAll('.sym').forEach(el=>{
+    el.onclick=()=>{
+      N=parseInt(el.dataset.n,10)||12;
+      document.querySelectorAll('.sym').forEach(s=>s.classList.toggle('on',s===el));
+    };
+  });
+
+  // ---------- arranque ----------
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
