@@ -214,7 +214,13 @@ select:focus{outline:none;border-color:var(--cy)}
     var a=angForPc(pc);
     return {x:g.cx+Math.cos(a)*g.R, y:g.cy+Math.sin(a)*g.R, a:a};
   }
-  function hueForPc(pc){ return pc*30; }
+  // capa de color compartida (croma/Scriabin/quintas vía localStorage)
+  var SCRIABIN_HUE=[0,271,60,213,197,0,225,29,291,127,210,217];
+  function palMode(){try{return localStorage.getItem('music0-pal')||'croma';}catch(e){return 'croma';}}
+  function hueForPc(pc){ var m=palMode();
+    if(m==='scriabin') return SCRIABIN_HUE[pc];
+    if(m==='quintas') return ((pc*7)%12)*30;
+    return pc*30; }
 
   // ---- interaccion: clic en cuenta ----
   function pickBead(mx,my){

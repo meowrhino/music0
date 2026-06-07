@@ -147,26 +147,17 @@
     ['add6',   [0,4,7,9]],
     ['m6',     [0,3,7,9]]
   ];
-  function ivSig(pcs){ // firma de intervalos (multiconjunto) si hay 4 notas distintas
-    const u=[...new Set(pcs.map(v=>((v%12)+12)%12))];
-    if(u.length!==4) return null;
-    return intervals(u).slice().sort((a,b)=>a-b).join(',');
-  }
   function chordName(notes){
     const pcs=notes.map(v=>((v%12)+12)%12);
     const u=[...new Set(pcs)].sort((a,b)=>a-b);
     if(u.length===1) return 'unísono ('+NOTAS[u[0]]+')';
     if(u.length===2) return 'díada '+u.map(p=>NOTAS[p]).join('–');
     if(u.length===3) return 'tríada (voz doblada) '+u.map(p=>NOTAS[p]).join('–');
-    const sig=ivSig(pcs);
     for(const r of u){
       const rel=u.map(p=>(p-r+12)%12).sort((a,b)=>a-b);
       const m=TIPOS.find(t=>t[1].join(',')===rel.join(','));
       if(m) return NOTAS[r]+' '+m[0];
     }
-    // si no se reconoce por raíz, intenta por firma de intervalos
-    if(sig){ const m=TIPOS.find(t=>intervals(t[1]).slice().sort((a,b)=>a-b).join(',')===sig);
-      if(m) return '≈ '+m[0]; }
     return u.map(p=>NOTAS[p]).join(' ');
   }
 

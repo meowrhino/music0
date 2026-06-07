@@ -287,7 +287,7 @@
     const done=drawn>=STEPS-1;
     document.getElementById('readout').innerHTML=
       `cociente &nbsp;<b>${iv.a}:${iv.b}</b> &nbsp;<i>${iv.t}</i><br>`+
-      `${NOTAS[BASE_MIDI%12]} ${f1.toFixed(1)} Hz &middot; ${NOTAS[(BASE_MIDI+iv.s)%12]} ${f2.toFixed(1)} Hz<br>`+
+      `${NOTAS[BASE_MIDI%12]} ${f1.toFixed(1)} Hz &middot; ${NOTAS[((Math.round(69+12*Math.log2(f2/440))%12)+12)%12]} ${f2.toFixed(1)} Hz<br>`+
       `amortig. <b>${(damping).toFixed(2)}</b> &middot; desajuste <b>${(detune).toFixed(2)}</b><br>`+
       `trazo &nbsp;<b>${prog}%</b> ${done?'(amortiguado → centro)':'…'}`;
   }

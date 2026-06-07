@@ -292,7 +292,7 @@
     rowBin=new Int32Array(H);
     for(let y=0;y<H;y++){
       // y/H en [0,1] desde arriba. Invertimos: arriba=F_MAX
-      const t=y/(H-1);                          // 0 arriba .. 1 abajo
+      const t=(H>1)?y/(H-1):0;                   // 0 arriba .. 1 abajo (guard H=1)
       const logf=LOG_MAX-(LOG_MAX-LOG_MIN)*t;    // log2(freq) de esta fila
       const f=Math.pow(2,logf);
       let bin=Math.round(f/nyq*nBins);
