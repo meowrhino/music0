@@ -25,6 +25,15 @@
   .lede b{color:var(--txt)}
   .count{display:inline-flex;gap:14px;margin-top:18px;font:600 12px var(--mono);color:var(--dim);flex-wrap:wrap}
   .count b{color:var(--cy)}
+  a.essay-cta{display:block;text-decoration:none;color:inherit;margin-top:28px;position:relative;
+    border-radius:18px;padding:22px 24px;overflow:hidden;
+    background:linear-gradient(110deg,#12122a,#0c0c18);border:1px solid #2a2a4a;transition:.22s}
+  a.essay-cta:hover{transform:translateY(-3px);border-color:var(--pu);box-shadow:0 18px 50px -22px var(--pu)}
+  a.essay-cta::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+    background:linear-gradient(180deg,var(--cy),var(--pu),var(--mg))}
+  .ec-k{font:600 11px var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--pu)}
+  .ec-t{display:block;font:750 22px/1.2 var(--sans);margin:8px 0 4px;letter-spacing:-.01em}
+  .ec-s{display:block;font:400 14px var(--sans);color:#aaaac6}
 
   section.cat{margin-top:46px}
   .cat-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
@@ -77,6 +86,11 @@
       pieza es autónoma: ábrela, tócala, escúchala. Están ordenadas de lo <b>geométrico</b> a lo
       <b>perceptual</b>. Todo en <b>Canvas + Web Audio</b>, sin dependencias ni red.</p>
     <div class="count" id="count"></div>
+    <a class="essay-cta" href="ensayo.html">
+      <span class="ec-k">ensayo explorable · empieza aquí</span>
+      <span class="ec-t">La armonía, explicada con figuras →</span>
+      <span class="ec-s">un paseo guiado de lo geométrico a lo perceptual, con cada idea para tocarla</span>
+    </a>
   </header>
 
   <div id="sections"></div>
@@ -89,13 +103,14 @@
     <div class="rumbos">
       <div class="rumbo now"><h3>A · galería ✦</h3><p>Mini-experimentos autónomos + este navegador. Donde vivimos.</p></div>
       <div class="rumbo seed"><h3>B · showpiece ◐</h3><p>Pieza profunda: el Tonnetz+ (PLR + MIDI) ya apunta aquí. Siguiente: torus 3D.</p></div>
-      <div class="rumbo seed"><h3>C · ensayo ◐</h3><p>Scrollytelling con widgets. La portada por categorías es el primer paso.</p></div>
+      <div class="rumbo now"><h3>C · ensayo ✦</h3><p><a href="ensayo.html" style="color:var(--cy)">El ensayo explorable</a> ya hila las piezas con narrativa y widgets.</p></div>
       <div class="rumbo"><h3>D · playground</h3><p>Instrumento en vivo: tocas (MIDI) y varias visualizaciones reaccionan a la vez.</p></div>
     </div>
   </section>
 
   <footer>
     <span>music0</span>
+    <a href="ensayo.html">ensayo</a>
     <a href="investigacion.md">investigación</a>
     <a href="README.md">readme</a>
     <span style="color:#44445e">VI = interés visual · CD = profundidad conceptual (de la investigación)</span>
