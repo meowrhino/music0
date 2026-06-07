@@ -241,24 +241,35 @@
     W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
     ctx.setTransform(dpr,0,0,dpr,0,0);}
   addEventListener('resize',resize);resize();
-  const COLORS=['#3ee8d0','#9b6bff','#ff4d9d'];
+  const COLORS=['#3ee8d0','#9b6bff','#ff4d9d','#5aa9ff','#e9ff5a'];
+  // armonógrafo en vivo: curvas de Lissajous amortiguadas cuyos cocientes derivan lentamente
   function draw(now){
     requestAnimationFrame(draw);
     ctx.clearRect(0,0,W,H);
-    const t=now/1000, cx=W*0.5, cy=H*0.42, R=Math.min(W,H)*0.42;
+    const t=now/1000, cx=W*0.5, cy=H*0.44, R=Math.min(W,H)*0.46;
+    const rot=t*0.04;
     ctx.globalCompositeOperation='lighter';
-    for(let k=0;k<3;k++){
-      const a=2+k, b=3+k, ph=t*0.15*(k+1);
+    for(let k=0;k<5;k++){
+      const a=2+k + 0.5*Math.sin(t*0.07+k), b=3+k + 0.5*Math.cos(t*0.05+k*1.3);
+      const ph=t*0.12*(k+1), dphi=rot*(k%2?1:-1);
       ctx.beginPath();
-      for(let i=0;i<=1400;i++){const tt=i/1400*2*Math.PI;
-        const x=cx+R*Math.sin(a*tt+ph), y=cy+R*0.8*Math.sin(b*tt);
-        i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
-      ctx.strokeStyle=COLORS[k]+'22';ctx.lineWidth=1.2;ctx.stroke();
+      for(let i=0;i<=1600;i++){
+        const tt=i/1600*2*Math.PI;
+        const damp=0.55+0.45*Math.cos(tt*0.5);           // ligera respiración
+        let x=R*damp*Math.sin(a*tt+ph), y=R*0.82*damp*Math.sin(b*tt);
+        const cs=Math.cos(dphi), sn=Math.sin(dphi);       // giro lento del campo
+        const xr=x*cs-y*sn, yr=x*sn+y*cs;
+        i?ctx.lineTo(cx+xr,cy+yr):ctx.moveTo(cx+xr,cy+yr);
+      }
+      ctx.strokeStyle=COLORS[k]+'1f';ctx.lineWidth=1.2;ctx.stroke();
     }
     ctx.globalCompositeOperation='source-over';
-    const g=ctx.createLinearGradient(0,0,0,H);
+    const g=ctx.createRadialGradient(cx,cy,R*0.2,cx,cy,R*1.3);
     g.addColorStop(0,'#06060d00');g.addColorStop(1,'#06060dcc');
     ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+    const g2=ctx.createLinearGradient(0,0,0,H);
+    g2.addColorStop(0,'#06060d66');g2.addColorStop(0.5,'#06060d00');g2.addColorStop(1,'#06060daa');
+    ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);
   }
   requestAnimationFrame(draw);
 })();
