@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>14 · Orbifold de Tymoczko — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:7;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:6;
+    display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:14px 16px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .voice{display:flex;flex-direction:column;gap:4px;min-width:170px}
+  .voice label{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+    display:flex;justify-content:space-between}
+  .voice label b{color:var(--yl)}
+  input[type=range]{width:100%;accent-color:var(--mg)}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .sep{width:1px;height:30px;background:#23233e}
+  .read{position:fixed;left:18px;bottom:120px;z-index:5;font:600 13px/1.7 var(--mono);color:var(--dim)}
+  .read b{color:var(--yl)} .read .u{color:var(--mg)} .read .t{color:var(--cy)}
+  .hint{position:fixed;right:18px;top:54px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);
+    text-align:right;max-width:280px}
+  @media(max-width:680px){.hint{display:none}.read{bottom:160px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">14 · ORBIFOLD</h1>
+  <span class="sub">la banda de Möbius de Tymoczko (díadas)</span>
+</div>
+<div class="hint">2 notas = un punto en una banda de Möbius.<br><span style="color:var(--mg)">borde</span> = unísonos · <span style="color:var(--cy)">centro</span> = tritonos.<br>cruza las voces y aparecerás por el otro lado.</div>
+<div class="read" id="read"></div>
+<div class="panel">
+  <div class="voice">
+    <label>voz 1 <b id="l1">C4</b></label>
+    <input type="range" id="v1" min="0" max="24" value="0" step="0.1">
+  </div>
+  <div class="voice">
+    <label>voz 2 <b id="l2">E4</b></label>
+    <input type="range" id="v2" min="0" max="24" value="4" step="0.1">
+  </div>
+  <div class="sep"></div>
+  <span class="chip" id="cross">⇄ cruzar voces</span>
+  <span class="chip on" id="snd">▶ sonar</span>
+  <span class="chip on" id="auto">↻ auto</span>
+  <span class="chip" id="clr">limpiar estela</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  const TAU=Math.PI*2, BASE=261.63; // C4
+  let v1=0, v2=4;                    // semitonos sobre C4 (0..24)
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,cx,cy,scale;
+  function resize(){ dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0); cx=W/2;cy=H/2-10; scale=Math.min(W,H)*0.30; }
+  addEventListener('resize',resize);
+
+  // ---------- Möbius + cámara 3D ----------
+  const Rg=1.15, Wd=0.5;
+  function mob(s,w){ const rr=Rg+Wd*w*Math.cos(s/2);
+    return [ rr*Math.cos(s), rr*Math.sin(s), Wd*w*Math.sin(s/2) ]; }
+  let rotX=0.6, rotY=0, autoY=0, auto=true;
+  const FOV=3.4;
+  function proj(p){
+    const yaw=rotY+autoY, c1=Math.cos(yaw), s1=Math.sin(yaw);
+    let x1=p[0]*c1+p[2]*s1, z1=-p[0]*s1+p[2]*c1, y1=p[1];
+    const cp=Math.cos(rotX), sp=Math.sin(rotX);
+    let y2=y1*cp-z1*sp, z2=y1*sp+z1*cp;
+    const persp=FOV/(FOV-z2);
+    return { x:cx+x1*persp*scale, y:cy+y2*persp*scale, z:z2, persp };
+  }
+  function alphaZ(z){ return Math.max(0.08,Math.min(1,0.18+0.82*((z+1.6)/3.2))); }
+
+  // díada -> (s,w) en la banda
+  function coords(a,b){
+    const sum=((a+b)%12+12)%12;
+    const s=Math.PI*sum/6;                 // 0..2π : una vuelta por "octava de suma"
+    let dd=(((b-a)%12)+12)%12;             // 0..12 dirigido
+    const iv=Math.min(dd,12-dd);           // 0..6 intervalo no ordenado
+    const sign=(dd<=6)?1:-1;
+    const w=(1-iv/6)*sign;                 // unísono=±1 (borde), tritono=0 (centro)
+    return {s,w,iv,dd};
+  }
+
+  // ---------- audio ----------
+  let actx=null, o1=null, o2=null, g1=null, g2=null, master=null, playing=true;
+  const freq=s=>BASE*Math.pow(2,s/12);
+  function ensure(){
+    if(actx) return;
+    actx=new(window.AudioContext||window.webkitAudioContext)();
+    master=actx.createGain(); master.gain.value=0; master.connect(actx.destination);
+    o1=actx.createOscillator(); o2=actx.createOscillator(); o1.type=o2.type='triangle';
+    g1=actx.createGain(); g2=actx.createGain(); g1.gain.value=g2.gain.value=0.5;
+    o1.connect(g1).connect(master); o2.connect(g2).connect(master);
+    o1.start(); o2.start(); retune();
+  }
+  function retune(){ if(!actx)return; const t=actx.currentTime+0.02;
+    o1.frequency.setTargetAtTime(freq(v1),t,0.02); o2.frequency.setTargetAtTime(freq(v2),t,0.02); }
+  function setPlay(p){ playing=p; if(p)ensure(); if(actx){ if(actx.state==='suspended')actx.resume();
+      master.gain.setTargetAtTime(p?0.16:0,actx.currentTime,0.05);}
+    const b=document.getElementById('snd'); b.classList.toggle('on',p); b.textContent=p?'⏸ sonando':'▶ sonar'; }
+
+  // ---------- estela ----------
+  let trail=[];
+  function pushTrail(){ const c=coords(v1,v2); trail.push({s:c.s,w:c.w}); if(trail.length>160)trail.shift(); }
+
+  // ---------- nombres ----------
+  function nm(s){ const m=Math.round(s); return NOTE[((m%12)+12)%12]+(4+Math.floor(m/12)); }
+  function updateLabels(){ document.getElementById('l1').textContent=nm(v1);
+    document.getElementById('l2').textContent=nm(v2);
+    document.getElementById('v1').value=v1; document.getElementById('v2').value=v2; }
+
+  // ---------- render ----------
+  function lerpC(a,b,t){ return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t]; }
+  const C_TRI=[62,232,208], C_UNI=[255,77,157];
+  function colFor(w){ const c=lerpC(C_TRI,C_UNI,Math.abs(w)); return c; }
+
+  function drawSurface(){
+    const NS=72;
+    // líneas de w constante (incluye borde |w|=1 = unísonos, centro w=0 = tritonos)
+    const ws=[-1,-0.66,-0.33,0,0.33,0.66,1];
+    const lines=[];
+    ws.forEach(w=>{ const pts=[]; let zs=0;
+      for(let i=0;i<=NS;i++){ const s=TAU*i/NS; const p=proj(mob(s,w)); pts.push(p); zs+=p.z; }
+      lines.push({pts,z:zs/(NS+1),w}); });
+    // costillas (s constante)
+    const NR=36;
+    for(let r=0;r<NR;r++){ const s=TAU*r/NR; const pts=[]; let zs=0;
+      for(let k=-1;k<=1;k+=0.25){ const p=proj(mob(s,k)); pts.push(p); zs+=p.z; }
+      lines.push({pts,z:zs/pts.length,rib:true,s}); }
+    lines.sort((a,b)=>a.z-b.z);
+    lines.forEach(L=>{ const al=alphaZ(L.z);
+      if(L.rib){ ctx.strokeStyle=`rgba(120,120,180,${al*0.18})`; ctx.lineWidth=1; }
+      else { const isEdge=Math.abs(L.w)>0.99, isCore=Math.abs(L.w)<0.01; const c=colFor(L.w);
+        ctx.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},${al*(isEdge?0.95:isCore?0.8:0.45)})`;
+        ctx.lineWidth=isEdge?2.4:isCore?1.8:1.1;
+        if(isCore){ctx.setLineDash([5,5]);} }
+      ctx.beginPath(); L.pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+      ctx.setLineDash([]);
+    });
+  }
+  function drawTrail(){
+    if(trail.length<2)return;
+    for(let i=1;i<trail.length;i++){
+      const a=trail[i-1], b=trail[i];
+      if(Math.abs(a.s-b.s)>Math.PI) continue; // evita el salto por la costura
+      const pa=proj(mob(a.s,a.w)), pb=proj(mob(b.s,b.w));
+      const t=i/trail.length, al=t*0.7*alphaZ((pa.z+pb.z)/2);
+      ctx.strokeStyle=`rgba(233,255,90,${al})`; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(pa.x,pa.y); ctx.lineTo(pb.x,pb.y); ctx.stroke();
+    }
+  }
+  function drawPoint(){
+    const c=coords(v1,v2); const p=proj(mob(c.s,c.w)); const col=colFor(c.w);
+    ctx.shadowColor=`rgb(${col[0]},${col[1]},${col[2]})`; ctx.shadowBlur=18;
+    ctx.fillStyle=`rgb(${col[0]},${col[1]},${col[2]})`;
+    ctx.beginPath(); ctx.arc(p.x,p.y,7*p.persp,0,7); ctx.fill(); ctx.shadowBlur=0;
+    // halo exterior
+    ctx.strokeStyle=`rgba(${col[0]},${col[1]},${col[2]},0.5)`; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(p.x,p.y,11*p.persp,0,7); ctx.stroke();
+  }
+
+  let anim=null; // {from,to,t0,dur} para v2
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(auto) autoY+=0.0014;
+    if(anim){ const k=Math.min(1,(now-anim.t0)/anim.dur);
+      v2=anim.from+(anim.to-anim.from)*k; retune(); updateLabels(); pushTrail();
+      if(k>=1)anim=null; }
+    ctx.clearRect(0,0,W,H);
+    drawSurface(); drawTrail(); drawPoint();
+    const c=coords(v1,v2);
+    let tag=''; if(c.iv<0.4)tag=' <span class="u">≈ UNÍSONO (borde)</span>';
+    else if(Math.abs(c.iv-6)<0.4)tag=' <span class="t">≈ TRITONO (centro)</span>';
+    document.getElementById('read').innerHTML=
+      `díada <b>${nm(v1)} + ${nm(v2)}</b><br>intervalo <b>${c.iv.toFixed(1)}</b> semitonos${tag}`;
+  }
+
+  // ---------- interacción ----------
+  let dragging=false, lx=0, ly=0;
+  cv.addEventListener('pointerdown',e=>{dragging=true;lx=e.clientX;ly=e.clientY;
+    cv.classList.add('drag');cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener('pointermove',e=>{ if(!dragging)return; const dx=e.clientX-lx,dy=e.clientY-ly;
+    lx=e.clientX;ly=e.clientY; rotY+=dx*0.008; rotX=Math.max(-1.45,Math.min(1.45,rotX+dy*0.008)); });
+  cv.addEventListener('pointerup',()=>{dragging=false;cv.classList.remove('drag');});
+
+  function onSlider(){ v1=+document.getElementById('v1').value; v2=+document.getElementById('v2').value;
+    anim=null; ensure(); if(playing && actx && actx.state==='suspended')actx.resume();
+    retune(); updateLabels(); pushTrail(); }
+  document.getElementById('v1').addEventListener('input',onSlider);
+  document.getElementById('v2').addEventListener('input',onSlider);
+  document.getElementById('cross').onclick=()=>{ ensure(); setPlay(true);
+    // anima la voz 2 cruzando por debajo de la voz 1 (pasa por el unísono → otro lado)
+    anim={from:v2, to:Math.max(0, v1-5), t0:performance.now(), dur:2600}; };
+  document.getElementById('snd').onclick=()=>setPlay(!playing);
+  document.getElementById('auto').onclick=function(){auto=!auto;this.classList.toggle('on',auto);};
+  document.getElementById('clr').onclick=()=>{trail=[];};
+
+  resize(); updateLabels(); pushTrail(); setPlay(true); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
