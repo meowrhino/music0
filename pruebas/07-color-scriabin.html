@@ -36,6 +36,7 @@
   input[type=range]{accent-color:var(--mg)}
   .foot{position:fixed;left:18px;bottom:14px;z-index:5;max-width:min(420px,52vw);
     font:400 10px/1.45 var(--mono);color:var(--dim);pointer-events:none}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
 </style>
 </head>
 <body>
@@ -302,9 +303,13 @@
     modo=m;
     bScria.classList.toggle("on",m==="scriabin");
     bSyn.classList.toggle("on",m==="syn");
+    // capa de color compartida: propaga a las demás piezas
+    try{ localStorage.setItem('music0-pal', m==="scriabin"?"scriabin":"croma"); }catch(e){}
   }
   bScria.addEventListener("click",()=>{ ensureCtx(); setModo("scriabin"); });
   bSyn.addEventListener("click",()=>{ ensureCtx(); setModo("syn"); });
+  // al abrir, refleja la paleta compartida elegida en otras piezas
+  try{ const _p=localStorage.getItem('music0-pal'); if(_p==='scriabin') setModo('scriabin'); else if(_p) setModo('syn'); }catch(e){}
   document.getElementById("stop").addEventListener("click",()=>{
     sel=-1; glow=0;
     if(actx && actx.state==="running"){ /* notas se autoextinguen; solo deselecciona */ }
