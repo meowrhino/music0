@@ -80,11 +80,12 @@ autonomía de cada `.html`. El mapa de Scriabin es el mismo de la pieza 07.
 - **A · Galería + navegador** ✦ *(aquí vivimos)* — mini-experimentos autónomos + este `index.html`.
 - **B · Showpiece profundo** ◐ *(en marcha)* — **Tonnetz+** (PLR + Web MIDI), **Tonnetz toroidal 3D**
   y el **orbifold de Tymoczko** (banda de Möbius de díadas) ya son piezas profundas.
-- **C · Ensayo explorable** ◐ *(empezado)* — la portada agrupada por categoría es el primer paso hacia
-  un scrollytelling con widgets incrustados (modelo osar.fr).
-- **D · Playground audiovisual en vivo** ◐ *(empezado)* — el **Instrumento (13)** ya hace esto:
-  tocas (piano/teclado/MIDI) y el círculo + Tonnetz + ondas reaccionan a la vez.
-- **E · Hub mixto** — A como base + 1–2 piezas de B + intro narrativa de C. Destino a medio plazo.
+- **C · Ensayo explorable** ✦ *(hecho)* — [`ensayo.html`](ensayo.html): scrollytelling de 10 paradas
+  que hila las piezas con narrativa y widgets incrustados (modelo osar.fr).
+- **D · Playground audiovisual en vivo** ✦ *(hecho)* — el **Instrumento (13)**: tocas
+  (piano/teclado/MIDI) y el círculo + Tonnetz + ondas reaccionan a la vez.
+- **E · Hub mixto** ◐ *(en marcha)* — el hub ya integra galería + ensayo destacado + pieza estrella
+  (★ instrumento); falta fundirlo aún más en una sola experiencia.
 
 ## Ideas para el siguiente lote
 
