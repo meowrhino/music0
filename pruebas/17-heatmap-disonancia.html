@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>17 · Heatmap de disonancia 2D — music0</title>
+<style>
+  :root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+  .read{position:fixed;left:18px;top:54px;z-index:5;font:700 18px/1.25 var(--mono);color:var(--yl);text-shadow:0 0 12px #000;pointer-events:none}
+  .read small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:4px;max-width:300px}
+  .read b{color:var(--cy)}
+  @media(max-width:760px){
+    .panel{left:0;right:0;bottom:0;transform:none;max-width:100%;border-radius:0;flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;padding:10px}
+    .read{font-size:15px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">17 · HEATMAP DE DISONANCIA 2D (TRÍADAS)</h1>
+  <span class="sub">Plomp–Levelt · Sethares · 6 parciales</span>
+</div>
+<div class="read" id="read">mueve el ratón<small>azul = consonante · rojo = disonante. clic para oír la tríada.</small></div>
+<div class="panel">
+  <div class="grp"><span class="lbl">audio</span>
+    <button class="chip" id="btnSnd">▶ iniciar sonido</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">valles</span>
+    <button class="chip on" id="btnLab">etiquetas</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">base</span>
+    <span class="lbl" style="color:var(--cy)" id="baseLbl">C · 261.6 Hz</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- helpers comunes ----------
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+  // ---------- modelo ----------
+  const F0=261.63;            // C4 base fija
+  const BASE_MIDI=60;         // C4
+  const NP=6;                 // parciales por nota (1/k)
+  const N=90;                 // rejilla N x N (x,y en semitonos 0..12)
+  const SEMI_MAX=12;
+
+  // disonancia sensorial entre 2 parciales (Sethares / endolith)
+  function pairDiss(f1,a1,f2,a2){
+    if(f1>f2){const t=f1;f1=f2;f2=t;const u=a1;a1=a2;a2=u;}
+    const s=0.24/(0.0207*f1+18.96);
+    const fd=f2-f1;
+    const l=Math.min(a1,a2);
+    return l*(5*Math.exp(-3.51*s*fd)-5*Math.exp(-5.75*s*fd));
+  }
+
+  // parciales de una nota a frecuencia f
+  function partials(f){
+    const P=[];
+    for(let k=1;k<=NP;k++)P.push([f*k,1/k]);
+    return P;
+  }
+
+  // disonancia total de una tríada {f0, f0*2^(x/12), f0*2^(y/12)}
+  function triadDiss(x,y){
+    const A=partials(F0);
+    const B=partials(F0*Math.pow(2,x/12));
+    const C=partials(F0*Math.pow(2,y/12));
+    const P=A.concat(B,C);
+    let d=0;
+    for(let i=0;i<P.length;i++)
+      for(let j=i+1;j<P.length;j++)
+        d+=pairDiss(P[i][0],P[i][1],P[j][0],P[j][1]);
+    return d;
+  }
+
+  // ---------- rejilla precalculada (estática) ----------
+  const grid=new Float32Array(N*N);
+  let gMin=1e18,gMax=-1e18;
+  for(let iy=0;iy<N;iy++){
+    const y=SEMI_MAX*iy/(N-1);
+    for(let ix=0;ix<N;ix++){
+      const x=SEMI_MAX*ix/(N-1);
+      const d=triadDiss(x,y);
+      grid[iy*N+ix]=d;
+      if(d<gMin)gMin=d; if(d>gMax)gMax=d;
+    }
+  }
+  const gSpan=(gMax-gMin)||1;
+
+  // mapa de color azul->cian->amarillo->rojo (t en 0..1)
+  function heatColor(t){
+    t=t<0?0:t>1?1:t;
+    let r,g,b;
+    if(t<0.5){ // azul -> cian
+      const u=t/0.5;
+      r=10+u*30; g=40+u*180; b=140+u*100;
+    }else{     // amarillo -> rojo
+      const u=(t-0.5)/0.5;
+      r=240; g=230-u*210; b=40-u*40;
+    }
+    return [r|0,g|0,b|0];
+  }
+
+  // ImageData N x N (se escala al área del canvas al dibujar)
+  const heatCv=document.createElement('canvas');
+  heatCv.width=N; heatCv.height=N;
+  const heatCtx=heatCv.getContext('2d');
+  const img=heatCtx.createImageData(N,N);
+  for(let iy=0;iy<N;iy++){
+    for(let ix=0;ix<N;ix++){
+      const t=(grid[iy*N+ix]-gMin)/gSpan;
+      const c=heatColor(t);
+      // eje Y hacia arriba: fila 0 del canvas = y máximo
+      const py=(N-1-iy);
+      const o=(py*N+ix)*4;
+      img.data[o]=c[0]; img.data[o+1]=c[1]; img.data[o+2]=c[2]; img.data[o+3]=255;
+    }
+  }
+  heatCtx.putImageData(img,0,0);
+
+  // ---------- valles consonantes notables ----------
+  const VALLES=[
+    {x:4,y:7,n:'mayor'},
+    {x:3,y:7,n:'menor'},
+    {x:3,y:6,n:'disminuida'},
+    {x:4,y:8,n:'aumentada'},
+    {x:5,y:7,n:'sus4'}
+  ];
+
+  // ---------- audio ----------
+  let actx=null, wave=null, voices=null, master=null;
+  function ensureCtx(){
+    if(!actx){
+      actx=new(window.AudioContext||window.webkitAudioContext)();
+      const im=new Float32Array(NP+1), re=new Float32Array(NP+1);
+      for(let k=1;k<=NP;k++)im[k]=1/k;
+      wave=actx.createPeriodicWave(re,im);
+      master=actx.createGain();
+      master.gain.value=0.0;
+      master.connect(actx.destination);
+    }
+    if(actx.state==='suspended')actx.resume();
+    return actx;
+  }
+  let sndReady=false;
+  function startAudio(){
+    ensureCtx();
+    sndReady=true;
+    const btn=document.getElementById('btnSnd');
+    btn.textContent='♪ sonido activo';
+    btn.classList.add('on');
+  }
+
+  function playTriad(x,y){
+    if(!sndReady){startAudio();}
+    const a=ensureCtx();
+    stopTriad(true);
+    const freqs=[F0, F0*Math.pow(2,x/12), F0*Math.pow(2,y/12)];
+    voices=[];
+    const g=a.createGain();
+    g.gain.value=0;
+    g.connect(master);
+    master.gain.setTargetAtTime(0.9,a.currentTime,0.01);
+    freqs.forEach(f=>{
+      const o=a.createOscillator();
+      o.setPeriodicWave(wave);
+      o.frequency.value=f;
+      o.connect(g);
+      o.start();
+      voices.push(o);
+    });
+    g.gain.setTargetAtTime(0.18,a.currentTime,0.02);
+    g.gain.setTargetAtTime(0.0,a.currentTime+0.55,0.18);
+    voices._g=g;
+    const vs=voices;
+    setTimeout(()=>{ vs.forEach(o=>{try{o.stop();}catch(e){}}); }, 1100);
+  }
+  function stopTriad(quick){
+    if(!voices)return;
+    const a=actx, g=voices._g;
+    try{ if(g)g.gain.setTargetAtTime(0,a.currentTime,quick?0.01:0.05); }catch(e){}
+    const vs=voices; voices=null;
+    setTimeout(()=>{ vs.forEach(o=>{try{o.stop();}catch(e){}}); }, 120);
+  }
+
+  // ---------- canvas / layout ----------
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,padL,padR,padT,padB,plotW,plotH;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    const narrow=W<760;
+    padL=narrow?44:62;
+    padR=narrow?16:26;
+    padT=narrow?92:96;
+    padB=narrow?96:64;   // deja sitio al panel sin tapar la figura
+    // área cuadrada centrada en lo disponible
+    const availW=W-padL-padR, availH=H-padT-padB;
+    const side=Math.max(80,Math.min(availW,availH));
+    plotW=side; plotH=side;
+    padL=padL+(availW-side)/2;
+    padT=padT+(availH-side)/2;
+  }
+  window.addEventListener('resize',resize);
+
+  // mapeo semitono <-> pixel dentro del plot
+  function X(semi){return padL+(semi/SEMI_MAX)*plotW;}
+  function Y(semi){return padT+plotH-(semi/SEMI_MAX)*plotH;} // y arriba
+  function semiFromPx(px,py){
+    const sx=( (px-padL)/plotW )*SEMI_MAX;
+    const sy=( (padT+plotH-py)/plotH )*SEMI_MAX;
+    return [Math.max(0,Math.min(SEMI_MAX,sx)), Math.max(0,Math.min(SEMI_MAX,sy))];
+  }
+
+  // nombre de nota aproximado para un intervalo en semitonos sobre la base
+  function noteName(semi){
+    const m=Math.round(BASE_MIDI+semi);
+    const name=NOTAS[((m%12)+12)%12];
+    const oct=Math.floor(m/12)-1;
+    return name+oct;
+  }
+  const INTERV=['1','m2','M2','m3','M3','4','TT','5','m6','M6','m7','M7','8'];
+  function intervName(semi){
+    const r=Math.round(semi);
+    return (r>=0&&r<=12)?INTERV[r]:semi.toFixed(1)+'st';
+  }
+
+  // ---------- interacción ----------
+  let mx=null,my=null,inside=false;
+  function setMouse(px,py){
+    mx=px; my=py;
+    inside = px>=padL && px<=padL+plotW && py>=padT && py<=padT+plotH;
+  }
+  cv.addEventListener('pointermove',e=>{
+    const r=cv.getBoundingClientRect();
+    setMouse(e.clientX-r.left, e.clientY-r.top);
+  });
+  cv.addEventListener('pointerleave',()=>{inside=false;mx=my=null;});
+  cv.addEventListener('pointerdown',e=>{
+    const r=cv.getBoundingClientRect();
+    setMouse(e.clientX-r.left, e.clientY-r.top);
+    if(!sndReady){ startAudio(); }
+    if(inside){
+      const [sx,sy]=semiFromPx(mx,my);
+      playTriad(sx,sy);
+    }
+  });
+
+  document.getElementById('btnSnd').addEventListener('click',e=>{
+    e.stopPropagation();
+    startAudio();
+  });
+  let showLabels=true;
+  document.getElementById('btnLab').addEventListener('click',function(e){
+    e.stopPropagation();
+    showLabels=!showLabels;
+    this.classList.toggle('on',showLabels);
+  });
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+
+    // heatmap escalado
+    ctx.imageSmoothingEnabled=true;
+    ctx.drawImage(heatCv,0,0,N,N,padL,padT,plotW,plotH);
+
+    // marco
+    ctx.strokeStyle='#2a2a48'; ctx.lineWidth=1;
+    ctx.strokeRect(padL+0.5,padT+0.5,plotW,plotH);
+
+    // ejes: rejilla cada semitono + etiquetas
+    ctx.font='600 10px ui-monospace,monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillStyle='#8888aa';
+    const stepLbl=(plotW/SEMI_MAX)<28?2:1;
+    for(let s=0;s<=SEMI_MAX;s++){
+      const gx=X(s), gy=Y(s);
+      // marcas leves
+      ctx.strokeStyle='rgba(255,255,255,0.05)';
+      ctx.beginPath(); ctx.moveTo(gx,padT); ctx.lineTo(gx,padT+plotH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(padL,gy); ctx.lineTo(padL+plotW,gy); ctx.stroke();
+      if(s%stepLbl===0){
+        // eje X abajo
+        ctx.fillStyle='#9a9ac0'; ctx.textAlign='center'; ctx.textBaseline='top';
+        ctx.fillText(s+'', gx, padT+plotH+5);
+        ctx.fillStyle='#5b5b80';
+        ctx.fillText(INTERV[s], gx, padT+plotH+18);
+        // eje Y izquierda
+        ctx.fillStyle='#9a9ac0'; ctx.textAlign='right'; ctx.textBaseline='middle';
+        ctx.fillText(s+'', padL-6, gy);
+      }
+    }
+    // títulos de eje
+    ctx.fillStyle='#7e7ea0'; ctx.font='600 11px ui-monospace,monospace';
+    ctx.textAlign='center'; ctx.textBaseline='top';
+    ctx.fillText('2ª nota — semitonos sobre la base →', padL+plotW/2, padT+plotH+34);
+    ctx.save();
+    ctx.translate(padL-30, padT+plotH/2); ctx.rotate(-Math.PI/2);
+    ctx.textAlign='center'; ctx.textBaseline='bottom';
+    ctx.fillText('3ª nota — semitonos →', 0, 0);
+    ctx.restore();
+
+    // valles consonantes
+    if(showLabels){
+      VALLES.forEach(v=>{
+        const x=X(v.x), y=Y(v.y);
+        ctx.save();
+        ctx.globalCompositeOperation='lighter';
+        ctx.fillStyle='rgba(62,232,208,0.9)';
+        ctx.shadowColor='#3ee8d0'; ctx.shadowBlur=12;
+        ctx.beginPath(); ctx.arc(x,y,4,0,7); ctx.fill();
+        ctx.restore();
+        ctx.fillStyle='#cfeee9'; ctx.font='700 10px ui-monospace,monospace';
+        ctx.textAlign='center'; ctx.textBaseline='bottom';
+        ctx.fillText(v.n, x, y-7);
+      });
+    }
+
+    // cursor + tríada bajo el ratón
+    if(inside && mx!=null){
+      const [sx,sy]=semiFromPx(mx,my);
+      const cx=X(sx), cy=Y(sy);
+      // crosshair
+      ctx.strokeStyle='rgba(255,77,157,0.55)'; ctx.lineWidth=1; ctx.setLineDash([4,4]);
+      ctx.beginPath(); ctx.moveTo(cx,padT); ctx.lineTo(cx,padT+plotH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(padL,cy); ctx.lineTo(padL+plotW,cy); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle='#ff4d9d'; ctx.shadowColor='#ff4d9d'; ctx.shadowBlur=14;
+      ctx.beginPath(); ctx.arc(cx,cy,6,0,7); ctx.fill();
+      ctx.restore();
+
+      // readout
+      const d=triadDiss(sx,sy);
+      const tnorm=(d-gMin)/gSpan;
+      const notes=noteName(0)+' '+noteName(sx)+' '+noteName(sy);
+      const intv=intervName(sx)+' / '+intervName(sy);
+      const rd=document.getElementById('read');
+      rd.childNodes[0].nodeValue=notes;
+      rd.querySelector('small').innerHTML=
+        'intervalos <b>'+intv+'</b> · x='+sx.toFixed(1)+' y='+sy.toFixed(1)+
+        '<br>disonancia '+d.toFixed(2)+' (rel '+(tnorm*100).toFixed(0)+'%) · clic para oír';
+    }
+  }
+
+  resize();
+  document.getElementById('baseLbl').textContent='C · '+F0.toFixed(1)+' Hz';
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

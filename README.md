@@ -20,7 +20,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (14 piezas, agrupadas por categoría)
+## Las pruebas (18 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -40,6 +40,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 11 | [Tonnetz+](pruebas/11-tonnetz-midi.html) | Transformaciones PLR + Web MIDI + estela de conducción de voces (atajos P/L/R). | 4 | 9/9 |
 | 12 | [Tonnetz toroidal](pruebas/12-tonnetz-toro.html) | La retícula envuelta en un toro 3D navegable (Z₁₂ ≅ Z₃×Z₄). Gira + PLR. | 4 | 9/10 |
 | 14 | [Orbifold de Tymoczko](pruebas/14-orbifold-tymoczko.html) | Una díada = un punto en una banda de Möbius; borde=unísonos, centro=tritonos. Cruza voces. | 4 | 8/10 |
+| 15 | [Orbifold de tríadas](pruebas/15-orbifold-triadas.html) | El triángulo de tipos de tríada (sección del prisma): aumentada al centro, unísonos en los vértices. | 4 | 8/10 |
 
 **II · Frecuencia, ratios y afinación**
 
@@ -49,6 +50,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 04 | [Serie armónica](pruebas/04-serie-armonica.html) | Cuerda vibrante, 16 sobretonos, cents y timbre aditivo. | 2 | 8/9 |
 | 10 | [Lattice de entonación justa](pruebas/10-lattice-ji.html) | Retícula 5-límite (quintas × terceras justas); ratios, cents; justa vs temperada. | 2 | 8/9 |
 | 09 | [Hélice de Shepard](pruebas/09-helice-shepard.html) | Tono que sube/baja para siempre (Shepard–Risset), en espiral. | 2 | 7/9 |
+| 16 | [Cuerdas pitagóricas](pruebas/16-cuerdas-baroque.html) | Cuerdas con longitud ∝ 1/frecuencia; se pulsan en secuencia y vibran. À la Baroque.me. | 8 | 9/8 |
 
 **III · Física y espectro**
 
@@ -56,6 +58,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 |---|--------|----------|------|-------|
 | 05 | [Cymatics / Chladni](pruebas/05-cymatics-chladni.html) | 12 000 granos posándose en las líneas nodales del modo (n, m). | 3 | 9/8 |
 | 08 | [Mandala FFT](pruebas/08-mandala-fft.html) | El espectro dibuja un mandala radial que late; con micrófono opcional. | 5 | 9/5 |
+| 18 | [Cromagrama](pruebas/18-cromagrama.html) | El espectro plegado en 12 clases de altura; círculo de croma + cromagrama desplazante. Con micro. | 5 | 8/8 |
 
 **IV · Psicoacústica y color**
 
@@ -63,6 +66,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 |---|--------|----------|------|-------|
 | 06 | [Curva de disonancia](pruebas/06-curva-disonancia.html) | Modelo Plomp–Levelt/Sethares; valles = consonancia. Arrastra y oye. | 6 | 8/10 |
 | 07 | [Color ↔ nota](pruebas/07-color-scriabin.html) | Círculo de quintas con los colores de Scriabin / el arcoíris sinestésico. | 7 | 8/7 |
+| 17 | [Heatmap de disonancia](pruebas/17-heatmap-disonancia.html) | Mapa 2D de disonancia sensorial de tríadas (Sethares); los valles = consonancia. | 6 | 8/9 |
 
 ## Capa de color compartida
 
@@ -84,9 +88,9 @@ autonomía de cada `.html`. El mapa de Scriabin es el mismo de la pieza 07.
 
 ## Ideas para el siguiente lote
 
-- **Orbifold de tríadas** (3 notas): el prisma triangular/toroide de Tymoczko, siguiente nivel tras la díada.
-- **Ensayo explorable (C)** completo: scrollytelling que hila las piezas con texto (modelo osar.fr).
-- Pulir **responsive**: en móvil vertical el panel inferior tapa parte de la figura en algunas piezas.
+- **Modo E (hub mixto)** completo: fundir galería + ensayo + pieza destacada en una sola experiencia.
+- Pulir **responsive** en el resto de piezas (móvil vertical) y aplicar los remates "baja" pendientes.
+- Más profundidad: orbifold de tétradas (4 notas), Chladni 3D (marching cubes), espectrograma.
 
 ## Estructura
 
@@ -109,7 +113,11 @@ music0/
     ├── 11-tonnetz-midi.html
     ├── 12-tonnetz-toro.html
     ├── 13-instrumento.html
-    └── 14-orbifold-tymoczko.html
+    ├── 14-orbifold-tymoczko.html
+    ├── 15-orbifold-triadas.html
+    ├── 16-cuerdas-baroque.html
+    ├── 17-heatmap-disonancia.html
+    └── 18-cromagrama.html
 ```
 
 ## Stack

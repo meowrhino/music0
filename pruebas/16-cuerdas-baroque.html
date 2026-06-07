@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>16 · Cuerdas pitagóricas — music0</title>
+<style>
+  :root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg);width:96px}
+  .val{font:600 11px var(--mono);color:var(--txt);min-width:40px;text-align:right}
+  @media(max-width:760px){
+    .sub{display:none}
+    .panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none;bottom:10px;padding:9px 10px;border-radius:12px}
+    .panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}
+    .sep{height:20px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">16 · CUERDAS PITAGÓRICAS (BAROQUE.ME)</h1>
+  <span class="sub">armonía como cuerdas pulsadas · longitud ∝ 1/frecuencia</span>
+</div>
+<div class="panel">
+  <span class="chip" id="play">▶ sonar</span>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">escala</span>
+    <span class="chip on" id="scMaj">mayor</span>
+    <span class="chip" id="scPent">pentat.</span>
+    <span class="chip" id="scMin">menor</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">patrón</span>
+    <span class="chip on" id="ptUp">↑ sube</span>
+    <span class="chip" id="ptUpDn">↑↓</span>
+    <span class="chip" id="ptArp">arpegio</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">tempo</span>
+    <input type="range" id="tempo" min="40" max="220" value="110">
+    <span class="val" id="tempoV">110</span>
+  </div>
+  <span class="sep"></span>
+  <span class="chip on" id="orb">orbe ●</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const TAU=Math.PI*2;
+  const freq=midi=>440*Math.pow(2,(midi-69)/12);
+
+  // ---------- estado ----------
+  const escalas={
+    "mayor":   [0,2,4,5,7,9,11,12,14,16,17,19],
+    "menor":   [0,2,3,5,7,8,10,12,14,15,17,19],
+    "pentat.": [0,2,4,7,9,12,14,16,19,21,24,26]
+  };
+  const ROOT=57; // A3, fundamental
+  let escala="mayor";
+  let patron="up";        // up | updn | arp
+  let tempo=110;          // BPM (negras)
+  let playing=false;
+  let orbeOn=true;
+
+  // ---------- audio ----------
+  let actx=null, master=null;
+  function ctxOn(){
+    if(!actx){
+      actx=new(window.AudioContext||window.webkitAudioContext)();
+      master=actx.createGain(); master.gain.value=0.7;
+      master.connect(actx.destination);
+    }
+    if(actx.state==='suspended') actx.resume();
+  }
+  // pluck: tono fundamental + 2 armónicos, ataque rápido y caída larga
+  function pluck(midi,vel){
+    if(!actx) return;
+    vel=vel==null?1:vel;
+    const t=actx.currentTime;
+    const f=freq(midi);
+    const dur=1.7;
+    const g=actx.createGain();
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.22*vel,t+0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    g.connect(master);
+    // un leve filtro para que no suene metálico
+    const lp=actx.createBiquadFilter(); lp.type='lowpass';
+    lp.frequency.setValueAtTime(Math.min(8000,f*8),t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(400,f*2),t+dur*0.8);
+    lp.connect(g);
+    const parts=[[1,1.0],[2,0.34],[3,0.16]];
+    const oscs=[];
+    parts.forEach(([h,amp])=>{
+      const o=actx.createOscillator();
+      o.type= h===1?'triangle':'sine';
+      o.frequency.value=f*h;
+      const og=actx.createGain(); og.gain.value=amp;
+      o.connect(og).connect(lp);
+      o.start(t); o.stop(t+dur+0.05);
+      oscs.push(o);
+    });
+  }
+
+  // ---------- cuerdas ----------
+  // longitud ∝ 1/frecuencia (relación pitagórica de cuerda vibrante).
+  // Construimos N cuerdas afinadas a la escala; la más grave (raíz) es la más larga.
+  let strings=[];
+  function buildStrings(){
+    const grados=escalas[escala];
+    const N=grados.length;
+    const fRoot=freq(ROOT);
+    strings=grados.map((g,i)=>{
+      const midi=ROOT+g;
+      const f=freq(midi);
+      return {
+        midi, f, pc:midi%12,
+        rel: fRoot/f,   // 1 para la raíz, →0 para agudos (∝ 1/frec)
+        phase:0, amp:0, hit:0, idx:i
+      };
+    });
+    return N;
+  }
+
+  // ---------- layout ----------
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W=0,H=0,dpr=1;
+  let geo={x0:0, yTop:0, gap:0, maxLen:0};
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=Math.round(W*dpr); cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    layout();
+  }
+  function layout(){
+    const N=strings.length||buildStrings();
+    const narrow=W<760;
+    const top=narrow?86:108;
+    const bottomFree=narrow?66:140; // deja sitio al panel (puede ser de 2 filas en anchos medios)
+    const usableH=H-top-bottomFree;
+    geo.yTop=top;
+    geo.gap=usableH/(N+1);
+    // las cuerdas penden desde un "puente" superior; longitud horizontal codifica la altura.
+    // pivote (clavijero) a la izquierda; la cuerda se extiende a la derecha.
+    geo.x0=W*0.16;
+    geo.maxLen=W*0.70; // longitud de la cuerda raíz (rel=1)
+  }
+  addEventListener('resize',resize);
+
+  function stringY(i){ return geo.yTop + geo.gap*(i+1); }
+  function stringLen(s){ return geo.maxLen*s.rel; }
+
+  // ---------- pulsar ----------
+  function strike(i,vel){
+    const s=strings[i]; if(!s) return;
+    ctxOn();
+    pluck(s.midi, vel==null?1:vel);
+    s.amp=Math.min(1, (vel==null?1:vel));
+    s.phase=performance.now()/1000;
+    s.hit=1;
+    flashes.push({x:geo.x0+stringLen(s)*0.5, y:stringY(i), t:1, hue:s.pc*30});
+  }
+
+  // destellos del punto que pulsa
+  const flashes=[];
+
+  // ---------- secuenciador ----------
+  let stepIdx=0, dir=1, lastStep=0;
+  function sequenceOrder(){
+    const N=strings.length;
+    if(patron==='up')   return Array.from({length:N},(_,i)=>i);
+    if(patron==='updn'){ const a=Array.from({length:N},(_,i)=>i);
+      return a.concat(a.slice(1,-1).reverse()); }
+    if(patron==='arp'){ // arpegio I–III–V–VIII sobre la escala (índices)
+      const base=escala==='pentat.'?[0,1,2,3,4]:[0,2,4,7,4,2];
+      return base.filter(i=>i<N); }
+    return [0];
+  }
+  function tick(nowMs){
+    if(!playing) return;
+    const order=sequenceOrder();
+    const interval=60000/tempo; // ms por paso (negra)
+    if(nowMs-lastStep>=interval){
+      lastStep=nowMs;
+      const i=order[stepIdx % order.length];
+      strike(i);
+      stepIdx=(stepIdx+1)%order.length;
+    }
+  }
+
+  // ---------- dibujo ----------
+  function draw(nowMs){
+    requestAnimationFrame(draw);
+    const t=nowMs/1000;
+    tick(nowMs);
+
+    ctx.clearRect(0,0,W,H);
+
+    // puente (clavijero) vertical a la izquierda
+    ctx.strokeStyle='#1c1c34'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(geo.x0,geo.yTop); ctx.lineTo(geo.x0,stringY(strings.length-1)+geo.gap); ctx.stroke();
+
+    // cuerdas
+    for(let i=0;i<strings.length;i++){
+      const s=strings[i];
+      const y=stringY(i);
+      const len=stringLen(s);
+      const x1=geo.x0, x2=geo.x0+len;
+      const hue=s.pc*30;
+
+      // envolvente de decaimiento de la vibración, basada en la edad del golpe
+      let env=0;
+      if(s.hit>0){
+        const age=t-s.phase;
+        env=Math.exp(-age*1.6);
+        if(env<0.004){ s.hit=0; env=0; }
+      }
+      s.amp=env;
+      const active=env>0.004;
+
+      // cuerda en reposo (línea tenue) + etiqueta
+      ctx.globalCompositeOperation='source-over';
+      ctx.strokeStyle=active?`hsla(${hue},70%,40%,0.35)`:'#171730';
+      ctx.lineWidth=1;
+      if(!active){
+        ctx.beginPath(); ctx.moveTo(x1,y); ctx.lineTo(x2,y); ctx.stroke();
+      }
+
+      // cuerda vibrante: onda estacionaria sin(n*PI*x) que decae
+      if(active){
+        const segs=46;
+        const A=env*Math.min(18, geo.gap*0.42); // amplitud visual
+        const harm=1; // modo fundamental (un vientre)
+        const wob=Math.sin((t-s.phase)*40); // oscilación temporal rápida
+        ctx.globalCompositeOperation='lighter';
+        ctx.strokeStyle=`hsl(${hue},90%,64%)`;
+        ctx.lineWidth=2;
+        ctx.shadowColor=`hsl(${hue},90%,64%)`;
+        ctx.shadowBlur=12;
+        ctx.beginPath();
+        for(let k=0;k<=segs;k++){
+          const u=k/segs;
+          const yy=y + A*Math.sin(harm*Math.PI*u)*wob;
+          if(k===0) ctx.moveTo(x1,yy); else ctx.lineTo(x1+len*u,yy);
+        }
+        ctx.stroke();
+        ctx.shadowBlur=0;
+        ctx.globalCompositeOperation='source-over';
+      }
+
+      // nodos en los extremos (clavija y traste)
+      ctx.fillStyle=active?`hsl(${hue},85%,62%)`:'#22223c';
+      dot(x1,y,active?3.4:2.2);
+      // extremo (puntal) con etiqueta de nota
+      ctx.fillStyle=active?`hsl(${hue},85%,62%)`:'#33335a';
+      dot(x2,y,active?4:2.6);
+      ctx.fillStyle=active?`hsl(${hue},90%,72%)`:'#55557a';
+      ctx.font='600 10px ui-monospace,Menlo,monospace';
+      ctx.textAlign='left'; ctx.textBaseline='middle';
+      ctx.fillText(NOTAS[s.pc], x2+8, y);
+    }
+
+    // orbe que recorre y pulsa visualmente: corre por una línea vertical descendente
+    if(orbeOn && playing){
+      const order=sequenceOrder();
+      const interval=60000/tempo;
+      const prog=Math.min(1,(nowMs-lastStep)/interval);
+      const i=order[stepIdx % order.length];
+      const yNow=stringY(i);
+      const xNow=geo.x0 + stringLen(strings[i])*prog;
+      ctx.globalCompositeOperation='lighter';
+      const g=ctx.createRadialGradient(xNow,yNow,0,xNow,yNow,16);
+      g.addColorStop(0,'rgba(233,255,90,0.95)');
+      g.addColorStop(1,'rgba(233,255,90,0)');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(xNow,yNow,16,0,TAU); ctx.fill();
+      ctx.globalCompositeOperation='source-over';
+    }
+
+    // destellos de pulsación
+    ctx.globalCompositeOperation='lighter';
+    for(let f=flashes.length-1;f>=0;f--){
+      const fl=flashes[f];
+      fl.t-=0.045;
+      if(fl.t<=0){ flashes.splice(f,1); continue; }
+      const r=4+(1-fl.t)*30;
+      const g=ctx.createRadialGradient(fl.x,fl.y,0,fl.x,fl.y,r);
+      g.addColorStop(0,`hsla(${fl.hue},95%,70%,${fl.t*0.9})`);
+      g.addColorStop(1,`hsla(${fl.hue},95%,70%,0)`);
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(fl.x,fl.y,r,0,TAU); ctx.fill();
+    }
+    ctx.globalCompositeOperation='source-over';
+
+    // pie: leyenda pitagórica
+    ctx.fillStyle='#3a3a5a';
+    ctx.font='500 11px ui-monospace,Menlo,monospace';
+    ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+    ctx.fillText('1/1 raíz · 1/2 octava · 2/3 quinta · longitud ∝ 1/frecuencia',geo.x0,geo.yTop-14);
+  }
+  function dot(x,y,r){ ctx.beginPath(); ctx.arc(x,y,r,0,TAU); ctx.fill(); }
+
+  // ---------- clic para pulsar ----------
+  function pickString(px,py){
+    let best=-1, bd=18;
+    for(let i=0;i<strings.length;i++){
+      const y=stringY(i), x1=geo.x0, x2=geo.x0+stringLen(strings[i]);
+      if(px<x1-10 || px>x2+40) continue;
+      const d=Math.abs(py-y);
+      if(d<bd){ bd=d; best=i; }
+    }
+    return best;
+  }
+  cv.addEventListener('pointerdown',e=>{
+    ctxOn();
+    const rect=cv.getBoundingClientRect();
+    const px=e.clientX-rect.left, py=e.clientY-rect.top;
+    const i=pickString(px,py);
+    if(i>=0){ strike(i, 1); }
+  });
+
+  // ---------- controles ----------
+  const $=id=>document.getElementById(id);
+  function setScale(name,btn){
+    escala=name; buildStrings(); layout(); stepIdx=0; dir=1;
+    [['scMaj','mayor'],['scMin','menor'],['scPent','pentat.']].forEach(([b,n])=>{
+      $(b).classList.toggle('on', n===name);
+    });
+  }
+  $('scMaj').onclick=()=>setScale('mayor');
+  $('scMin').onclick=()=>setScale('menor');
+  $('scPent').onclick=()=>setScale('pentat.');
+
+  function setPat(p){
+    patron=p; stepIdx=0; dir=1;
+    [['ptUp','up'],['ptUpDn','updn'],['ptArp','arp']].forEach(([b,n])=>{
+      $(b).classList.toggle('on', n===p);
+    });
+  }
+  $('ptUp').onclick=()=>setPat('up');
+  $('ptUpDn').onclick=()=>setPat('updn');
+  $('ptArp').onclick=()=>setPat('arp');
+
+  $('tempo').addEventListener('input',e=>{ tempo=+e.target.value; $('tempoV').textContent=tempo; });
+
+  $('orb').onclick=function(){ orbeOn=!orbeOn; this.classList.toggle('on',orbeOn); };
+
+  $('play').onclick=function(){
+    ctxOn();
+    playing=!playing;
+    this.textContent= playing?'❚❚ pausa':'▶ sonar';
+    this.classList.toggle('on',playing);
+    if(playing){ lastStep=performance.now()-99999; } // dispara el primer paso ya
+  };
+
+  // ---------- init ----------
+  buildStrings();
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

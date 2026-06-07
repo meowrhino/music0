@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>15 · Orbifold de tríadas — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:14px;align-items:center;justify-content:center;
+    max-width:min(900px,95vw);padding:14px 16px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .voice{display:flex;flex-direction:column;gap:4px;min-width:140px}
+  .voice label{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+    display:flex;justify-content:space-between}
+  .voice label b{color:var(--yl)}
+  input[type=range]{width:100%;accent-color:var(--mg)}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .sep{width:1px;height:30px;background:#23233e}
+  .read{position:fixed;left:18px;top:54px;z-index:5;font:700 22px/1.1 var(--mono);color:var(--yl)}
+  .read small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:5px}
+  .hint{position:fixed;right:18px;top:54px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);
+    text-align:right;max-width:290px}
+  @media(max-width:680px){.hint{display:none}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">15 · ORBIFOLD DE TRÍADAS</h1>
+  <span class="sub">el triángulo de tipos de acorde (Tymoczko)</span>
+</div>
+<div class="read" id="read">—<small id="sub">mueve las 3 voces</small></div>
+<div class="hint">Sección del prisma de Tymoczko: cada tríada es un punto.<br><span style="color:var(--cy)">centro</span> = aumentada (la más simétrica) · <span style="color:var(--mg)">bordes</span> = notas dobladas · vértices = unísono triple.<br>Las 6 copias = la órbita que el orbifold pliega en un punto.</div>
+<div class="panel">
+  <div class="voice"><label>voz 1 <b id="l0">C</b></label><input type="range" id="v0" min="0" max="12" value="0" step="1"></div>
+  <div class="voice"><label>voz 2 <b id="l1">E</b></label><input type="range" id="v1" min="0" max="12" value="4" step="1"></div>
+  <div class="voice"><label>voz 3 <b id="l2">G</b></label><input type="range" id="v2" min="0" max="12" value="7" step="1"></div>
+  <div class="sep"></div>
+  <span class="chip" id="play">▶ tocar</span>
+  <span class="chip" id="clr">limpiar estela</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTE=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  let V=[0,4,7];
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,cx,cy,R,COR;
+  function resize(){ dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2+10; R=Math.min(W,H)*0.34;
+    COR=[[cx,cy-R],[cx-R*0.866,cy+R*0.5],[cx+R*0.866,cy+R*0.5]]; }
+  addEventListener('resize',resize);
+
+  // intervalos adyacentes (i1,i2,i3), suma 12, desde la nota más grave
+  function intervals(pcs){ const s=[...pcs].sort((a,b)=>a-b);
+    return [ (s[1]-s[0]+12)%12, (s[2]-s[1]+12)%12, (12-((s[2]-s[0])%12))%12 ]; }
+  function bary(w){ const t=(w[0]+w[1]+w[2])||1;
+    return [ (w[0]*COR[0][0]+w[1]*COR[1][0]+w[2]*COR[2][0])/t,
+             (w[0]*COR[0][1]+w[1]*COR[1][1]+w[2]*COR[2][1])/t ]; }
+  // las 6 permutaciones (órbita S3) de (i1,i2,i3)
+  function orbit(iv){ const [a,b,c]=iv;
+    return [[a,b,c],[a,c,b],[b,a,c],[b,c,a],[c,a,b],[c,b,a]].map(bary); }
+
+  // ---------- nombre de acorde ----------
+  const CH=[['aumentada',[0,4,8]],['mayor',[0,4,7]],['menor',[0,3,7]],['disminuida',[0,3,6]],
+    ['sus4',[0,5,7]],['sus2',[0,2,7]],['cuartal',[0,5,10]]];
+  function chordName(pcs){ const u=[...new Set(pcs)].sort((a,b)=>a-b);
+    if(u.length===1) return 'unísono ('+NOTE[u[0]]+')';
+    if(u.length===2) return 'díada '+u.map(p=>NOTE[p]).join('–');
+    for(const r of u){ const sig=u.map(p=>(p-r+12)%12).sort((a,b)=>a-b).join(',');
+      const m=CH.find(c=>c[1].join(',')===sig); if(m) return NOTE[r]+' '+m[0]; }
+    return u.map(p=>NOTE[p]).join(' '); }
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(m){ return 440*Math.pow(2,(m-69)/12); }
+  function play(){ const a=ctxOn(),t=a.currentTime,dur=1.1;
+    const g=a.createGain();g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.16,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    V.forEach(v=>{const o=a.createOscillator();o.type='triangle';o.frequency.value=freq(60+v);
+      o.connect(g);o.start(t);o.stop(t+dur);}); }
+
+  // ---------- estela ----------
+  let trail=[];
+  function pushTrail(){ const p=bary(intervals(V)); trail.push(p); if(trail.length>120)trail.shift(); }
+
+  // ---------- puntos de referencia ----------
+  const MARKS=[ {n:'aum', pcs:[0,4,8], c:'#3ee8d0'}, {n:'May', pcs:[0,4,7], c:'#e9ff5a'},
+    {n:'min', pcs:[0,3,7], c:'#ff4d9d'}, {n:'dim', pcs:[0,3,6], c:'#9b6bff'},
+    {n:'sus4',pcs:[0,5,7], c:'#5aa9ff'} ];
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    ctx.clearRect(0,0,W,H);
+    // triángulo
+    ctx.strokeStyle='#23233e';ctx.lineWidth=1.5;
+    ctx.beginPath();ctx.moveTo(COR[0][0],COR[0][1]);ctx.lineTo(COR[1][0],COR[1][1]);
+    ctx.lineTo(COR[2][0],COR[2][1]);ctx.closePath();ctx.stroke();
+    // vértices = unísono triple
+    ctx.fillStyle='#55557a';ctx.font='600 10px '+MONO;ctx.textAlign='center';
+    ctx.fillText('unísono',COR[0][0],COR[0][1]-12);
+    // medianas (zonas de simetría)
+    ctx.strokeStyle='#15152a';ctx.lineWidth=1;
+    for(let i=0;i<3;i++){const m=[(COR[(i+1)%3][0]+COR[(i+2)%3][0])/2,(COR[(i+1)%3][1]+COR[(i+2)%3][1])/2];
+      ctx.beginPath();ctx.moveTo(COR[i][0],COR[i][1]);ctx.lineTo(m[0],m[1]);ctx.stroke();}
+
+    // estela
+    if(trail.length>1){ ctx.strokeStyle='rgba(233,255,90,0.4)';ctx.lineWidth=1.5;ctx.beginPath();
+      trail.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.stroke(); }
+
+    // referencias
+    MARKS.forEach(mk=>{ const p=bary(intervals(mk.pcs));
+      ctx.fillStyle=mk.c;ctx.globalAlpha=0.85;ctx.beginPath();ctx.arc(p[0],p[1],4,0,7);ctx.fill();
+      ctx.globalAlpha=1;ctx.fillStyle=mk.c;ctx.font='600 11px '+MONO;ctx.textAlign='center';
+      ctx.fillText(mk.n,p[0],p[1]-10); });
+
+    // acorde actual: órbita de 6 + punto principal
+    const iv=intervals(V); const orb=orbit(iv); const main=bary(iv);
+    const even=1-Math.max(iv[0],iv[1],iv[2])/12;          // 1 = aumentado (centro)
+    const col=`hsl(${170+ (1-even)*-130|0} 80% 62%)`;     // cian(centro)→magenta(borde)
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    // polígono de la órbita
+    ctx.strokeStyle='rgba(120,255,236,0.25)';ctx.lineWidth=1;ctx.beginPath();
+    orb.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.stroke();
+    orb.forEach(p=>{ctx.fillStyle='rgba(120,255,236,0.5)';ctx.beginPath();ctx.arc(p[0],p[1],3.5,0,7);ctx.fill();});
+    ctx.restore();
+    ctx.shadowColor=col;ctx.shadowBlur=16;ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(main[0],main[1],8,0,7);ctx.fill();ctx.shadowBlur=0;
+
+    // readout
+    const pcs=V.map(v=>((v%12)+12)%12);
+    document.getElementById('read').childNodes[0].nodeValue=chordName(pcs);
+    document.getElementById('sub').textContent='intervalos ('+iv.join(', ')+')  ·  '+
+      (even>0.99?'la más simétrica':even<0.18?'casi un unísono/díada':'');
+  }
+
+  // ---------- UI ----------
+  function upd(){ const pcs=V.map(v=>((v%12)+12)%12);
+    document.getElementById('l0').textContent=NOTE[pcs[0]];
+    document.getElementById('l1').textContent=NOTE[pcs[1]];
+    document.getElementById('l2').textContent=NOTE[pcs[2]]; }
+  ['v0','v1','v2'].forEach((id,i)=>document.getElementById(id).addEventListener('input',e=>{
+    V[i]=+e.target.value; ctxOn(); upd(); pushTrail(); play(); }));
+  document.getElementById('play').onclick=play;
+  document.getElementById('clr').onclick=()=>{trail=[];};
+
+  resize(); upd(); pushTrail(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

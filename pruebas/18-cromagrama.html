@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>18 · CROMAGRAMA</title>
+<style>
+:root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+.back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+.panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+.chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+.now{font:600 11px var(--mono);color:var(--cy);min-width:74px;text-align:center}
+@media (max-width:640px),(max-aspect-ratio:1/1){
+  .panel{flex-wrap:nowrap;overflow-x:auto;left:8px;right:8px;transform:none;max-width:none;bottom:8px;padding:8px 10px;justify-content:flex-start;-webkit-overflow-scrolling:touch}
+  .sep{display:none}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">&larr; galeria</a>
+  <h1 class="title">18 · CROMAGRAMA (ESPECTRO &rarr; 12 CLASES)</h1>
+  <span class="sub">el espectro plegado en 12 alturas, en tiempo real</span>
+</div>
+<div class="panel">
+  <button id="bSound" class="chip">&#9654; sonar</button>
+  <button id="bMic" class="chip">&#127908; microfono</button>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">suaviz.</span>
+    <input id="rSmooth" type="range" min="0" max="0.95" step="0.01" value="0.6" style="width:90px">
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">ganancia</span>
+    <input id="rGain" type="range" min="0.3" max="3" step="0.05" value="1.2" style="width:90px">
+  </div>
+  <div class="sep"></div>
+  <span class="now" id="now">—</span>
+</div>
+<script>
+"use strict";
+(function(){
+  var NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+
+  // ---------- canvas ----------
+  var cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=window.innerWidth; H=window.innerHeight;
+    cv.width=Math.round(W*DPR); cv.height=Math.round(H*DPR);
+    cv.style.width=W+"px"; cv.style.height=H+"px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+    buildStrip();
+  }
+  window.addEventListener("resize",resize);
+
+  // strip (cromagrama desplazante) en buffer propio
+  var strip=document.createElement("canvas");
+  var sctx=strip.getContext("2d");
+  var SH=0; // alto del strip en px (12 filas * fila)
+  function buildStrip(){
+    // ancho del strip = zona util, alto = 12 filas. Se redibuja por completo en cada resize.
+    var sw=Math.max(64,Math.floor((W*DPR)));
+    var sh=Math.max(48,Math.floor(stripRect().h*DPR));
+    var old=null;
+    if(strip.width>1 && strip.height>1){ old=document.createElement("canvas"); old.width=strip.width; old.height=strip.height; old.getContext("2d").drawImage(strip,0,0); }
+    strip.width=sw; strip.height=sh; SH=sh;
+    sctx.fillStyle="#06060d"; sctx.fillRect(0,0,sw,sh);
+    if(old){ sctx.drawImage(old,0,0,sw,sh); }
+  }
+
+  // ---------- audio ----------
+  var AC=null, analyser=null, freqData=null, internalGain=null, masterGain=null;
+  var micStream=null, micNode=null, internalRunning=false, started=false;
+  var smoothEl=document.getElementById("rSmooth");
+  var gainEl=document.getElementById("rGain");
+
+  // progresion de acordes (semitonos relativos a una raiz MIDI)
+  var roots=[57,53,55,52,50,55]; // A F G E D G (loop)
+  var qualities=[
+    [0,4,7,11],   // maj7
+    [0,4,7,11],
+    [0,4,7,10],   // dom7
+    [0,3,7,10],   // min7
+    [0,3,7,10],
+    [0,4,7,11]
+  ];
+  var chordIdx=0, chordTimer=0, CHORD_DUR=3.0;
+  var voices=[]; // {osc,gain}
+
+  function makeOsc(f){
+    var o=AC.createOscillator();
+    o.type="sawtooth"; o.frequency.value=f;
+    var g=AC.createGain(); g.gain.value=0;
+    // ligero filtro para no saturar
+    var lp=AC.createBiquadFilter(); lp.type="lowpass"; lp.frequency.value=3500;
+    o.connect(g); g.connect(lp); lp.connect(internalGain);
+    o.start();
+    return {osc:o,gain:g};
+  }
+
+  function setChord(i){
+    var t=AC.currentTime;
+    var root=roots[i%roots.length];
+    var q=qualities[i%qualities.length];
+    // fade out viejas
+    for(var k=0;k<voices.length;k++){
+      voices[k].gain.gain.cancelScheduledValues(t);
+      voices[k].gain.gain.setTargetAtTime(0,t,0.25);
+      (function(v){ setTimeout(function(){ try{v.osc.stop();}catch(e){} },900); })(voices[k]);
+    }
+    voices=[];
+    for(var j=0;j<q.length;j++){
+      var f=freq(root+q[j]);
+      var v=makeOsc(f);
+      v.gain.gain.setTargetAtTime(0.16,t+0.02,0.18);
+      voices.push(v);
+    }
+  }
+
+  function buildInternal(){
+    internalGain=AC.createGain(); internalGain.gain.value=1;
+    internalGain.connect(analyser);
+    internalGain.connect(masterGain);
+    chordIdx=0; chordTimer=0;
+    setChord(0);
+    internalRunning=true;
+  }
+
+  function ensureAudio(){
+    if(AC) return;
+    AC=new (window.AudioContext||window.webkitAudioContext)();
+    masterGain=AC.createGain(); masterGain.gain.value=0.5;
+    masterGain.connect(AC.destination);
+    analyser=AC.createAnalyser();
+    analyser.fftSize=8192;
+    analyser.smoothingTimeConstant=0.5;
+    freqData=new Float32Array(analyser.frequencyBinCount);
+  }
+
+  function startSound(){
+    ensureAudio();
+    if(AC.state==="suspended") AC.resume();
+    if(!internalRunning) buildInternal();
+    started=true;
+    document.getElementById("bSound").classList.add("on");
+  }
+
+  function toggleMic(){
+    ensureAudio();
+    if(AC.state==="suspended") AC.resume();
+    var bMic=document.getElementById("bMic");
+    if(micNode){
+      // desconectar mic
+      try{micNode.disconnect();}catch(e){}
+      if(micStream){ micStream.getTracks().forEach(function(t){t.stop();}); }
+      micStream=null; micNode=null;
+      bMic.classList.remove("on");
+      // reactivar interno (rebuild si hacía falta, o desmutear)
+      if(!internalRunning) buildInternal();
+      else if(internalGain) internalGain.gain.setTargetAtTime(1, AC.currentTime, 0.06);
+      return;
+    }
+    if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+      flash("microfono no disponible");
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}})
+      .then(function(stream){
+        micStream=stream;
+        micNode=AC.createMediaStreamSource(stream);
+        micNode.connect(analyser);
+        bMic.classList.add("on");
+        started=true;
+        document.getElementById("bSound").classList.add("on");
+        // silencia el audio interno para que el cromagrama refleje SOLO el micrófono
+        if(internalGain) internalGain.gain.setTargetAtTime(0, AC.currentTime, 0.06);
+      })
+      .catch(function(err){
+        flash("microfono denegado / error");
+        // mantener audio interno
+        if(!internalRunning){ startSound(); }
+      });
+  }
+
+  var flashMsg="", flashT=0;
+  function flash(m){ flashMsg=m; flashT=performance.now()+2200; }
+
+  document.getElementById("bSound").addEventListener("click",startSound);
+  document.getElementById("bMic").addEventListener("click",toggleMic);
+  smoothEl.addEventListener("input",function(){ if(analyser) analyser.smoothingTimeConstant=parseFloat(smoothEl.value); });
+
+  // ---------- chroma ----------
+  var C0=16.3516; // Hz
+  var chroma=new Float32Array(12);   // valor instantaneo normalizado [0..1]
+  var chromaRaw=new Float32Array(12);
+  var FMIN=50, FMAX=5000;
+
+  function computeChroma(){
+    if(!analyser){ for(var z=0;z<12;z++){ chroma[z]*=0.9; } return; }
+    analyser.getFloatFrequencyData(freqData);
+    var sr=AC.sampleRate, n=analyser.fftSize;
+    for(var p=0;p<12;p++) chromaRaw[p]=0;
+    var binLow=Math.max(1,Math.floor(FMIN*n/sr));
+    var binHigh=Math.min(freqData.length-1,Math.ceil(FMAX*n/sr));
+    for(var i=binLow;i<=binHigh;i++){
+      var f=i*sr/n;
+      if(f<=0) continue;
+      // dB -> magnitud lineal aprox (clamp piso)
+      var db=freqData[i];
+      if(db<-90) continue;
+      var mag=Math.pow(10,db/20);
+      var pc=(((Math.round(12*Math.log2(f/C0)))%12)+12)%12;
+      chromaRaw[pc]+=mag;
+    }
+    // normalizar (con puerta de energía absoluta: en silencio/ruido no inventamos una nota)
+    var max=1e-9, total=0;
+    for(var q=0;q<12;q++){ total+=chromaRaw[q]; if(chromaRaw[q]>max) max=chromaRaw[q]; }
+    if(total<2e-3){ for(var z2=0;z2<12;z2++) chroma[z2]*=0.85; return; }
+    var gain=parseFloat(gainEl.value);
+    for(var r=0;r<12;r++){
+      var v=Math.min(1,(chromaRaw[r]/max)*gain);
+      chroma[r]=chroma[r]*0.45 + v*0.55; // suavizado temporal extra
+    }
+  }
+
+  // ---------- progresion temporal ----------
+  var lastT=performance.now();
+  function tickChords(dt){
+    if(!internalRunning||!AC) return;
+    chordTimer+=dt;
+    if(chordTimer>=CHORD_DUR){
+      chordTimer-=CHORD_DUR;
+      chordIdx++;
+      setChord(chordIdx);
+    }
+  }
+
+  // ---------- dibujo ----------
+  function stripRect(){
+    // banda inferior del cromagrama desplazante
+    var pad=Math.min(W,H)*0.04;
+    var h=Math.max(110,Math.min(H*0.30,260));
+    var bottomReserve=84; // espacio panel
+    return {x:pad,y:H-h-bottomReserve,w:W-pad*2,h:h};
+  }
+
+  function hueCss(pc,sat,lit,a){
+    return "hsla("+(pc*30)+","+sat+"%,"+lit+"%,"+(a==null?1:a)+")";
+  }
+
+  function pushStripColumn(){
+    if(SH<2||strip.width<2) return;
+    var sw=strip.width;
+    // desplazar 1px a la izquierda
+    sctx.globalCompositeOperation="source-over";
+    sctx.drawImage(strip,1,0,sw-1,SH, 0,0,sw-1,SH);
+    // limpiar ultima columna
+    sctx.fillStyle="#06060d";
+    sctx.fillRect(sw-1,0,1,SH);
+    // dibujar la columna nueva (12 filas, C abajo)
+    var rowH=SH/12;
+    sctx.globalCompositeOperation="lighter";
+    for(var p=0;p<12;p++){
+      var e=chroma[p];
+      if(e<=0.02) continue;
+      var y=SH-(p+1)*rowH;
+      var col=hueCss(p,90,Math.round(20+e*55),Math.min(1,e*1.1));
+      sctx.fillStyle=col;
+      sctx.fillRect(sw-1,y,1,Math.ceil(rowH)+1);
+    }
+    sctx.globalCompositeOperation="source-over";
+  }
+
+  function drawCircle(cx,cy,R){
+    var inner=R*0.42;
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.globalCompositeOperation="source-over";
+    // anillo base
+    ctx.beginPath(); ctx.arc(0,0,R,0,Math.PI*2);
+    ctx.strokeStyle="#1a1a2e"; ctx.lineWidth=1; ctx.stroke();
+
+    var seg=Math.PI*2/12;
+    var start=-Math.PI/2 - seg/2; // C arriba
+
+    // sectores
+    ctx.globalCompositeOperation="lighter";
+    for(var p=0;p<12;p++){
+      var e=chroma[p];
+      var a0=start+p*seg, a1=a0+seg;
+      var rOut=inner+(R-inner)*(0.18+0.82*e);
+      // relleno radial del sector
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a0)*inner,Math.sin(a0)*inner);
+      ctx.arc(0,0,inner,a0,a1);
+      ctx.lineTo(Math.cos(a1)*rOut,Math.sin(a1)*rOut);
+      ctx.arc(0,0,rOut,a1,a0,true);
+      ctx.closePath();
+      var grad=ctx.createRadialGradient(0,0,inner,0,0,rOut);
+      grad.addColorStop(0,hueCss(p,85,30,0.10+0.20*e));
+      grad.addColorStop(1,hueCss(p,95,Math.round(40+e*30),0.25+0.6*e));
+      ctx.fillStyle=grad;
+      ctx.fill();
+    }
+
+    // separadores + etiquetas
+    ctx.globalCompositeOperation="source-over";
+    for(var q=0;q<12;q++){
+      var a0b=start+q*seg;
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a0b)*inner,Math.sin(a0b)*inner);
+      ctx.lineTo(Math.cos(a0b)*R,Math.sin(a0b)*R);
+      ctx.strokeStyle="#10101e"; ctx.lineWidth=1; ctx.stroke();
+    }
+    // circulo interior
+    ctx.beginPath(); ctx.arc(0,0,inner,0,Math.PI*2);
+    ctx.fillStyle="#06060d"; ctx.fill();
+    ctx.strokeStyle="#1a1a2e"; ctx.lineWidth=1; ctx.stroke();
+
+    // etiquetas notas
+    var lblR=R+ (R*0.13);
+    ctx.font="700 "+Math.max(10,Math.round(R*0.085))+"px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    var maxE=0.0001, maxP=0;
+    for(var m=0;m<12;m++){ if(chroma[m]>maxE){maxE=chroma[m];maxP=m;} }
+    for(var p2=0;p2<12;p2++){
+      var ac=start+p2*seg+seg/2;
+      var lx=Math.cos(ac)*lblR, ly=Math.sin(ac)*lblR;
+      var on=chroma[p2]>0.25;
+      ctx.fillStyle= on? hueCss(p2,95,70,1) : "#52526e";
+      if(p2===maxP && maxE>0.3){
+        ctx.shadowColor=hueCss(p2,95,60,1); ctx.shadowBlur=12;
+      } else { ctx.shadowBlur=0; }
+      ctx.fillText(NOTAS[p2],lx,ly);
+    }
+    ctx.shadowBlur=0;
+
+    // texto central
+    ctx.font="700 "+Math.max(11,Math.round(R*0.10))+"px ui-monospace,Menlo,monospace";
+    ctx.fillStyle=maxE>0.3? hueCss(maxP,90,75,1) : "#3a3a55";
+    ctx.fillText(maxE>0.3?NOTAS[maxP]:"··",0,-2);
+    ctx.font="600 "+Math.max(8,Math.round(R*0.05))+"px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#52526e";
+    ctx.fillText("clase dom.",0,R*0.14);
+
+    ctx.restore();
+    return maxE>0.3?maxP:-1;
+  }
+
+  function drawStripFrame(){
+    var r=stripRect();
+    ctx.save();
+    ctx.globalCompositeOperation="source-over";
+    // marco
+    ctx.fillStyle="#080812";
+    ctx.fillRect(r.x,r.y,r.w,r.h);
+    // imagen strip escalada
+    if(strip.width>1){
+      ctx.imageSmoothingEnabled=false;
+      ctx.drawImage(strip,0,0,strip.width,strip.height, r.x,r.y,r.w,r.h);
+    }
+    // borde
+    ctx.strokeStyle="#20203a"; ctx.lineWidth=1;
+    ctx.strokeRect(r.x+0.5,r.y+0.5,r.w-1,r.h-1);
+    // etiquetas Y (clases)
+    var rowH=r.h/12;
+    ctx.font="600 9px ui-monospace,Menlo,monospace";
+    ctx.textAlign="left"; ctx.textBaseline="middle";
+    for(var p=0;p<12;p++){
+      var y=r.y+r.h-(p+0.5)*rowH;
+      ctx.fillStyle= chroma[p]>0.3? hueCss(p,90,70,1) : "#3a3a55";
+      ctx.fillText(NOTAS[p],r.x+4,y);
+    }
+    // eje tiempo
+    ctx.fillStyle="#52526e";
+    ctx.font="600 9px ui-monospace,Menlo,monospace";
+    ctx.textAlign="right"; ctx.textBaseline="bottom";
+    ctx.fillText("tiempo →",r.x+r.w-4,r.y-3);
+    ctx.restore();
+  }
+
+  function drawHint(){
+    if(started) return;
+    ctx.save();
+    ctx.globalCompositeOperation="source-over";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.font="600 14px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#7e7ea0";
+    ctx.fillText("pulsa ▶ sonar para iniciar el audio",W/2,H*0.5);
+    ctx.font="400 11px system-ui,sans-serif";
+    ctx.fillStyle="#52526e";
+    ctx.fillText("(o 🎤 microfono — el audio se activa con tu gesto)",W/2,H*0.5+22);
+    ctx.restore();
+  }
+
+  function drawFlash(){
+    if(performance.now()>flashT) return;
+    ctx.save();
+    ctx.globalCompositeOperation="source-over";
+    ctx.textAlign="center"; ctx.textBaseline="top";
+    ctx.font="600 12px ui-monospace,Menlo,monospace";
+    ctx.fillStyle=hueCss(0,90,70,1);
+    ctx.fillStyle="#ff4d9d";
+    ctx.fillText(flashMsg,W/2,64);
+    ctx.restore();
+  }
+
+  var nowEl=document.getElementById("now");
+  function updateNow(maxP){
+    if(maxP>=0){ nowEl.textContent=NOTAS[maxP]; nowEl.style.color=hueCss(maxP,90,72,1); }
+    else { nowEl.textContent="—"; nowEl.style.color="#7e7ea0"; }
+  }
+
+  // ---------- loop ----------
+  var frameCount=0;
+  function frame(t){
+    var dt=(t-lastT)/1000; lastT=t;
+    if(dt>0.25) dt=0.25;
+    tickChords(dt);
+    computeChroma();
+
+    // fondo con fade leve para dejar rastro suave en zona circulo
+    ctx.globalCompositeOperation="source-over";
+    ctx.fillStyle="#06060d";
+    ctx.fillRect(0,0,W,H);
+
+    // zona del circulo: por encima de la strip
+    var r=stripRect();
+    var availTop=58; // bajo la barra superior
+    var availBottom=r.y;
+    var cy=(availTop+availBottom)/2;
+    var R=Math.min(W*0.34,(availBottom-availTop)*0.46,210);
+    R=Math.max(60,R);
+    var cx=W/2;
+
+    // empujar columna del strip (cada frame -> 1px/frame)
+    pushStripColumn();
+    drawStripFrame();
+
+    var maxP=drawCircle(cx,cy,R);
+    updateNow(maxP);
+
+    drawHint();
+    drawFlash();
+
+    frameCount++;
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
