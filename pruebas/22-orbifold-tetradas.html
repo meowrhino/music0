@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>22 · Orbifold de tétradas — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .voice{display:flex;flex-direction:column;gap:4px;min-width:128px}
+  .voice label{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+    display:flex;justify-content:space-between}
+  .voice label b{color:var(--yl)}
+  input[type=range]{width:100%;accent-color:var(--mg)}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:30px;background:#23233e}
+  .read{position:fixed;left:18px;top:54px;z-index:5;font:700 22px/1.1 var(--mono);color:var(--yl)}
+  .read small{display:block;font:500 11px/1.6 var(--mono);color:var(--dim);margin-top:5px}
+  .hint{position:fixed;right:18px;top:54px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);
+    text-align:right;max-width:300px}
+  @media(max-width:680px){.hint{display:none}.read{font-size:18px}}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel .voice{min-width:118px}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">22 · ORBIFOLD DE TÉTRADAS</h1>
+  <span class="sub">el tetraedro de tipos de acorde de 4 notas (Tymoczko)</span>
+</div>
+<div class="read" id="read">—<small id="sub">mueve las 4 voces</small></div>
+<div class="hint">Continuación de la pieza 15 hacia 4 voces.<br>El espacio de TIPOS de tétrada es un 3-simplex: cada vértice es un intervalo adyacente (i1..i4) que suma 12.<br><span style="color:var(--cy)">centro</span> (3,3,3,3) = séptima disminuida (la más simétrica) · <span style="color:var(--mg)">bordes/vértices</span> = notas dobladas.<br>Arrastra para girar.</div>
+<div class="panel">
+  <div class="voice"><label>voz 1 <b id="l0">C</b></label><input type="range" id="v0" min="0" max="12" value="0" step="1"></div>
+  <div class="voice"><label>voz 2 <b id="l1">E</b></label><input type="range" id="v1" min="0" max="12" value="4" step="1"></div>
+  <div class="voice"><label>voz 3 <b id="l2">G</b></label><input type="range" id="v2" min="0" max="12" value="7" step="1"></div>
+  <div class="voice"><label>voz 4 <b id="l3">A#</b></label><input type="range" id="v3" min="0" max="12" value="10" step="1"></div>
+  <div class="sep"></div>
+  <span class="chip" id="play">▶ tocar</span>
+  <span class="chip on" id="trailToggle">estela</span>
+  <span class="chip" id="clr">limpiar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  let V=[0,4,7,10];
+
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,cx,cy,scale;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2+10; scale=Math.min(W,H)*0.30;
+  }
+  addEventListener('resize',resize);
+
+  // ---------- intervalos adyacentes (i1,i2,i3,i4), suman 12 ----------
+  // ordena las 4 clases de altura y toma las diferencias consecutivas + cierre de octava
+  function intervals(notes){
+    const s=[...notes].map(v=>((v%12)+12)%12).sort((a,b)=>a-b);
+    const i=[];
+    for(let k=0;k<4;k++) i.push((s[(k+1)%4]-s[k]+12)%12);
+    return i; // suma 12
+  }
+
+  // ---------- vértices baricéntricos del tetraedro (3D) ----------
+  // tetraedro regular centrado en el origen; vértice k = intervalo i_{k+1}
+  const VERT=[
+    [ 1, 1, 1],
+    [ 1,-1,-1],
+    [-1, 1,-1],
+    [-1,-1, 1]
+  ].map(v=>v.map(x=>x*0.62));
+
+  // posición 3D del acorde según pesos baricéntricos
+  function bary3(w){
+    const t=(w[0]+w[1]+w[2]+w[3])||1;
+    const p=[0,0,0];
+    for(let k=0;k<4;k++) for(let d=0;d<3;d++) p[d]+=w[k]*VERT[k][d]/t;
+    return p;
+  }
+
+  // ---------- rotación + proyección manual ----------
+  let rotX=-0.42, rotY=0.6, autoRot=true;
+  function project(p){
+    // rota en Y luego en X
+    let [x,y,z]=p;
+    let cyy=Math.cos(rotY), syy=Math.sin(rotY);
+    let x1= x*cyy + z*syy;
+    let z1=-x*syy + z*cyy;
+    let cxx=Math.cos(rotX), sxx=Math.sin(rotX);
+    let y1= y*cxx - z1*sxx;
+    let z2= y*sxx + z1*cxx;
+    // perspectiva débil
+    const cam=4.2;
+    const f=cam/(cam-z2);
+    return { sx:cx+x1*scale*f, sy:cy+y1*scale*f, z:z2, f:f };
+  }
+
+  // aristas del tetraedro
+  const EDGES=[[0,1],[0,2],[0,3],[1,2],[1,3],[2,3]];
+
+  // ---------- nombre de acorde ----------
+  // firmas por intervalos adyacentes ordenados de menor a mayor (rotación-invariante)
+  const TIPOS=[
+    ['dom7',   [0,4,7,10]],
+    ['maj7',   [0,4,7,11]],
+    ['m7',     [0,3,7,10]],
+    ['m7b5',   [0,3,6,10]],
+    ['dim7',   [0,3,6,9]],
+    ['mMaj7',  [0,3,7,11]],
+    ['maj7#5', [0,4,8,11]],
+    ['7b5',    [0,4,6,10]],
+    ['7#5',    [0,4,8,10]],
+    ['add6',   [0,4,7,9]],
+    ['m6',     [0,3,7,9]]
+  ];
+  function ivSig(pcs){ // firma de intervalos (multiconjunto) si hay 4 notas distintas
+    const u=[...new Set(pcs.map(v=>((v%12)+12)%12))];
+    if(u.length!==4) return null;
+    return intervals(u).slice().sort((a,b)=>a-b).join(',');
+  }
+  function chordName(notes){
+    const pcs=notes.map(v=>((v%12)+12)%12);
+    const u=[...new Set(pcs)].sort((a,b)=>a-b);
+    if(u.length===1) return 'unísono ('+NOTAS[u[0]]+')';
+    if(u.length===2) return 'díada '+u.map(p=>NOTAS[p]).join('–');
+    if(u.length===3) return 'tríada (voz doblada) '+u.map(p=>NOTAS[p]).join('–');
+    const sig=ivSig(pcs);
+    for(const r of u){
+      const rel=u.map(p=>(p-r+12)%12).sort((a,b)=>a-b);
+      const m=TIPOS.find(t=>t[1].join(',')===rel.join(','));
+      if(m) return NOTAS[r]+' '+m[0];
+    }
+    // si no se reconoce por raíz, intenta por firma de intervalos
+    if(sig){ const m=TIPOS.find(t=>intervals(t[1]).slice().sort((a,b)=>a-b).join(',')===sig);
+      if(m) return '≈ '+m[0]; }
+    return u.map(p=>NOTAS[p]).join(' ');
+  }
+
+  // ---------- "evenness": 1 = séptima dism (centro), 0 = degenerado ----------
+  function evenness(iv){
+    // distancia normalizada al reparto perfecto (3,3,3,3)
+    let d=0; for(const x of iv) d+=Math.abs(x-3);
+    // d max = 12+...; en (12,0,0,0)-ish -> usamos cota práctica
+    const dmax=18; // |12-3|+3+3+3 = 18
+    return Math.max(0,1-d/dmax);
+  }
+  function evenColor(e){
+    // cian (centro, even) -> magenta (borde, degenerado)
+    const hue=170 + (1-e)*(330-170); // 170 cian -> 330 magenta
+    return 'hsl('+(hue|0)+' 85% 62%)';
+  }
+
+  // ---------- puntos de referencia ----------
+  const MARKS=[
+    {n:'dim7',  notes:[0,3,6,9],  c:'#3ee8d0'},
+    {n:'dom7',  notes:[0,4,7,10], c:'#e9ff5a'},
+    {n:'maj7',  notes:[0,4,7,11], c:'#9b6bff'},
+    {n:'m7',    notes:[0,3,7,10], c:'#5aa9ff'},
+    {n:'m7b5',  notes:[0,3,6,10], c:'#ff4d9d'}
+  ];
+
+  // ---------- audio ----------
+  let actx=null;
+  function ctxOn(){ if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume(); return actx; }
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+  function play(){
+    const a=ctxOn(),t=a.currentTime,dur=1.2;
+    const g=a.createGain();g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.14,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    V.forEach(v=>{ const o=a.createOscillator(); o.type='triangle';
+      o.frequency.value=freq(60+v); o.connect(g); o.start(t); o.stop(t+dur); });
+  }
+
+  // ---------- estela ----------
+  let trail=[], trailOn=true;
+  function pushTrail(){ const p=bary3(intervals(V)); trail.push(p); if(trail.length>140)trail.shift(); }
+
+  // ---------- render ----------
+  function draw(){
+    requestAnimationFrame(draw);
+    if(autoRot) rotY+=0.0035;
+    ctx.clearRect(0,0,W,H);
+
+    // proyecta vértices
+    const pv=VERT.map(project);
+
+    // caras tenues (relleno suave para dar volumen)
+    const FACES=[[0,1,2],[0,1,3],[0,2,3],[1,2,3]];
+    FACES.forEach(f=>{
+      ctx.beginPath();
+      f.forEach((vi,i)=>{ const q=pv[vi]; i?ctx.lineTo(q.sx,q.sy):ctx.moveTo(q.sx,q.sy); });
+      ctx.closePath();
+      ctx.fillStyle='rgba(40,40,80,0.08)';ctx.fill();
+    });
+
+    // aristas
+    ctx.strokeStyle='#26264a';ctx.lineWidth=1.4;
+    EDGES.forEach(e=>{ const a=pv[e[0]],b=pv[e[1]];
+      ctx.beginPath();ctx.moveTo(a.sx,a.sy);ctx.lineTo(b.sx,b.sy);ctx.stroke(); });
+
+    // etiquetas de vértices: intervalo dominante i_k
+    ctx.font='600 11px '+MONO;ctx.textAlign='center';
+    pv.forEach((q,k)=>{
+      ctx.fillStyle='#6c6c95';
+      ctx.beginPath();ctx.arc(q.sx,q.sy,3,0,7);ctx.fill();
+      ctx.fillStyle='#8888b0';
+      ctx.fillText('i'+(k+1)+'=12',q.sx,q.sy-10);
+    });
+
+    // estela
+    if(trail.length>1){
+      ctx.save();ctx.globalCompositeOperation='lighter';
+      ctx.strokeStyle='rgba(233,255,90,0.35)';ctx.lineWidth=1.5;ctx.beginPath();
+      trail.forEach((p,i)=>{ const q=project(p); i?ctx.lineTo(q.sx,q.sy):ctx.moveTo(q.sx,q.sy); });
+      ctx.stroke();ctx.restore();
+    }
+
+    // puntos de referencia
+    MARKS.forEach(mk=>{
+      const q=project(bary3(intervals(mk.notes)));
+      ctx.save();ctx.globalCompositeOperation='lighter';
+      ctx.fillStyle=mk.c;ctx.globalAlpha=0.85;
+      ctx.beginPath();ctx.arc(q.sx,q.sy,4.2*q.f,0,7);ctx.fill();
+      ctx.restore();
+      ctx.fillStyle=mk.c;ctx.font='600 11px '+MONO;ctx.textAlign='center';
+      ctx.fillText(mk.n,q.sx,q.sy-11);
+    });
+
+    // acorde actual
+    const iv=intervals(V);
+    const e=evenness(iv);
+    const col=evenColor(e);
+    const q=project(bary3(iv));
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    ctx.shadowColor=col;ctx.shadowBlur=20;
+    ctx.fillStyle=col;
+    ctx.beginPath();ctx.arc(q.sx,q.sy,9*q.f,0,7);ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.globalAlpha=0.4;ctx.beginPath();ctx.arc(q.sx,q.sy,16*q.f,0,7);ctx.fill();
+    ctx.restore();
+
+    // líneas finas del punto a los vértices (coordenadas baricéntricas visibles)
+    ctx.save();ctx.globalCompositeOperation='lighter';
+    pv.forEach((vp,k)=>{
+      const w=iv[k]/12;
+      if(w<0.02) return;
+      ctx.strokeStyle='rgba(62,232,208,'+(0.06+w*0.18).toFixed(3)+')';
+      ctx.lineWidth=0.6+w*1.6;
+      ctx.beginPath();ctx.moveTo(q.sx,q.sy);ctx.lineTo(vp.sx,vp.sy);ctx.stroke();
+    });
+    ctx.restore();
+
+    // readout
+    document.getElementById('read').childNodes[0].nodeValue=chordName(V);
+    let nota = e>0.985 ? 'la más simétrica (sept. disminuida)'
+            : e<0.30 ? 'muy degenerada (voces juntas)'
+            : '';
+    document.getElementById('sub').textContent='intervalos ('+iv.join(', ')+')  ·  '+nota;
+  }
+
+  // ---------- interacción: arrastrar para girar ----------
+  let dragging=false, px=0, py=0;
+  function down(x,y){ dragging=true; autoRot=false; px=x; py=y; cv.classList.add('drag'); }
+  function move(x,y){ if(!dragging) return;
+    rotY+=(x-px)*0.008; rotX+=(y-py)*0.008;
+    rotX=Math.max(-1.45,Math.min(1.45,rotX));
+    px=x; py=y; }
+  function up(){ dragging=false; cv.classList.remove('drag'); setTimeout(()=>{ if(!dragging) autoRot=true; },2500); }
+  cv.addEventListener('mousedown',e=>down(e.clientX,e.clientY));
+  addEventListener('mousemove',e=>move(e.clientX,e.clientY));
+  addEventListener('mouseup',up);
+  cv.addEventListener('touchstart',e=>{ const t=e.touches[0]; down(t.clientX,t.clientY); },{passive:true});
+  cv.addEventListener('touchmove',e=>{ const t=e.touches[0]; move(t.clientX,t.clientY); e.preventDefault(); },{passive:false});
+  cv.addEventListener('touchend',up);
+
+  // ---------- UI ----------
+  function upd(){
+    for(let i=0;i<4;i++){ const pc=((V[i]%12)+12)%12; document.getElementById('l'+i).textContent=NOTAS[pc]; }
+  }
+  ['v0','v1','v2','v3'].forEach((id,i)=>document.getElementById(id).addEventListener('input',e=>{
+    V[i]=+e.target.value; ctxOn(); upd(); if(trailOn) pushTrail(); play();
+  }));
+  document.getElementById('play').onclick=play;
+  document.getElementById('clr').onclick=()=>{ trail=[]; };
+  const tBtn=document.getElementById('trailToggle');
+  tBtn.onclick=()=>{ trailOn=!trailOn; tBtn.classList.toggle('on',trailOn); if(!trailOn) trail=[]; };
+
+  resize(); upd(); pushTrail(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

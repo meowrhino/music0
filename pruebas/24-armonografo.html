@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>24 · Armonógrafo — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{width:96px;accent-color:var(--mg)}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);
+    color:var(--dim);background:#0c0c18aa;padding:10px 12px;border-radius:12px;border:1px solid #1c1c33}
+  .readout b{color:var(--yl)} .readout i{color:var(--cy);font-style:normal}
+  @media(max-width:640px){.readout{display:none}}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">24 · ARMONÓGRAFO</h1>
+  <span class="sub">péndulos amortiguados dibujan el cociente</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="panel">
+  <div class="grp" id="intervals"></div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">amortig.</span>
+    <input type="range" id="damp" min="0" max="100" value="34" step="1">
+  </div>
+  <div class="grp">
+    <span class="lbl">desajuste</span>
+    <input type="range" id="detune" min="0" max="100" value="22" step="1">
+  </div>
+  <div class="sep"></div>
+  <span class="chip" id="redraw">↻ redibujar</span>
+  <span class="chip" id="sound">▶ sonar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const freq=(midi)=>440*Math.pow(2,(midi-69)/12);
+
+  // cocientes musicales: nombre, a:b (frec relativa entre ejes), semitonos sobre la base
+  const INTERVALS=[
+    {n:'1:1', t:'unísono', a:1, b:1, s:0},
+    {n:'2:1', t:'octava',  a:2, b:1, s:12},
+    {n:'3:2', t:'5ª justa',a:3, b:2, s:7},
+    {n:'4:3', t:'4ª justa',a:4, b:3, s:5},
+    {n:'5:4', t:'3ª mayor',a:5, b:4, s:4},
+    {n:'6:5', t:'3ª menor',a:6, b:5, s:3},
+    {n:'5:3', t:'6ª mayor',a:5, b:3, s:9},
+    {n:'7:5', t:'tritono',  a:7, b:5, s:6},
+    {n:'8:5', t:'6ª menor',a:8, b:5, s:8},
+    {n:'9:8', t:'2ª mayor',a:9, b:8, s:2},
+  ];
+
+  let cur=2;                // 3:2 por defecto
+  let damping=0.34;         // 0..1 -> factor de decaimiento
+  let detune=0.22;          // 0..1 -> desajuste fino que abre la espiral
+  const BASE_MIDI=57;       // A3 = 220 Hz para el sonido
+
+  // ---------- canvas ----------
+  const cv=document.getElementById('c');
+  const ctx=cv.getContext('2d');
+  let W=0,H=0,dpr=1;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    restart(); // recalcula y limpia con la nueva geometría
+  }
+  window.addEventListener('resize',resize);
+
+  // ---------- modelo del armonógrafo ----------
+  // 4 péndulos: dos por eje (x1,x2,y1,y2). Cada uno: amplitud, frecuencia, fase, decaimiento.
+  let pend=null;            // array de péndulos
+  let trail=null;           // puntos {x,y} precalculados del trazo completo
+  let drawn=0;              // cuántos puntos ya dibujados
+  const STEPS=4200;         // resolución del trazo
+  const DT=0.012;           // paso temporal de la simulación
+
+  // pequeño generador determinista para que cada "redibujar" sea distinto pero estable
+  function rng(seed){ let s=seed>>>0; return function(){ s=(s*1664525+1013904223)>>>0; return s/4294967296; }; }
+
+  function build(seed){
+    const iv=INTERVALS[cur];
+    const r=rng(seed);
+    // frecuencias base en el cociente del intervalo
+    const fx=iv.b;          // p.ej. 3:2 -> fx=2, fy=3
+    const fy=iv.a;
+    // desajuste: separa ligeramente los dos péndulos de cada eje -> espiral abierta
+    const dt=detune*0.06;
+    // decaimiento: cada péndulo decae a ritmo algo distinto
+    const baseDec=0.04+damping*0.42;
+    pend=[
+      // x
+      {ax:0.55+0.10*r(), fx:fx*(1+dt*(r()-0.5)), px:r()*Math.PI*2, dec:baseDec*(0.9+0.3*r())},
+      {ax:0.45+0.10*r(), fx:fx*(1-dt*(0.6+0.5*r())), px:r()*Math.PI*2, dec:baseDec*(0.9+0.3*r())},
+      // y
+      {ay:0.55+0.10*r(), fy:fy*(1+dt*(r()-0.5)), py:r()*Math.PI*2, dec:baseDec*(0.9+0.3*r())},
+      {ay:0.45+0.10*r(), fy:fy*(1-dt*(0.6+0.5*r())), py:r()*Math.PI*2, dec:baseDec*(0.9+0.3*r())},
+    ];
+    // precalcula el trazo
+    const R=Math.min(W,H)*0.34;
+    const cx=W/2, cy=H/2;
+    const TWO=Math.PI*2;
+    const pts=new Float32Array(STEPS*2);
+    const p=pend;
+    for(let i=0;i<STEPS;i++){
+      const t=i*DT;
+      const x=( p[0].ax*Math.sin(TWO*p[0].fx*t+p[0].px)*Math.exp(-p[0].dec*t)
+              + p[1].ax*Math.sin(TWO*p[1].fx*t+p[1].px)*Math.exp(-p[1].dec*t) );
+      const y=( p[2].ay*Math.sin(TWO*p[2].fy*t+p[2].py)*Math.exp(-p[2].dec*t)
+              + p[3].ay*Math.sin(TWO*p[3].fy*t+p[3].py)*Math.exp(-p[3].dec*t) );
+      pts[i*2]   = cx + x*R;
+      pts[i*2+1] = cy + y*R;
+    }
+    trail=pts;
+    drawn=0;
+    // limpia el lienzo a fondo negro al reiniciar
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,cv.width,cv.height);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+
+  let seed=Date.now();
+  function restart(){ build(seed); }
+  function redraw(){ seed=(seed*16807+1)>>>0; build(seed); }
+
+  // ---------- audio ----------
+  let actx=null,osc1=null,osc2=null,master=null,playing=false;
+  function ensureAudio(){
+    if(actx) return;
+    actx=new (window.AudioContext||window.webkitAudioContext)();
+    master=actx.createGain(); master.gain.value=0; master.connect(actx.destination);
+    osc1=actx.createOscillator(); osc1.type='sine';
+    osc2=actx.createOscillator(); osc2.type='sine';
+    const g1=actx.createGain(),g2=actx.createGain();
+    g1.gain.value=0.5; g2.gain.value=0.5;
+    osc1.connect(g1).connect(master); osc2.connect(g2).connect(master);
+    osc1.start(); osc2.start();
+    updateFreqs();
+  }
+  function updateFreqs(){
+    if(!actx) return;
+    const iv=INTERVALS[cur];
+    const f1=freq(BASE_MIDI);
+    const f2=f1*iv.a/iv.b;     // cociente justo
+    const t=actx.currentTime+0.02;
+    osc1.frequency.setTargetAtTime(f1,t,0.04);
+    osc2.frequency.setTargetAtTime(f2,t,0.04);
+  }
+  function toggleSound(){
+    ensureAudio();
+    if(actx.state==='suspended') actx.resume();
+    playing=!playing;
+    master.gain.setTargetAtTime(playing?0.16:0,actx.currentTime,0.05);
+    const el=document.getElementById('sound');
+    el.classList.toggle('on',playing);
+    el.textContent=playing?'⏸ sonando':'▶ sonar';
+  }
+
+  // ---------- UI ----------
+  const ivWrap=document.getElementById('intervals');
+  INTERVALS.forEach((iv,i)=>{
+    const el=document.createElement('span');
+    el.className='chip'+(i===cur?' on':'');
+    el.textContent=iv.n;
+    el.title=iv.t;
+    el.onclick=()=>{
+      cur=i;
+      [...ivWrap.children].forEach(c=>c.classList.remove('on'));
+      el.classList.add('on');
+      updateFreqs();
+      redraw();
+    };
+    ivWrap.appendChild(el);
+  });
+  document.getElementById('damp').oninput=e=>{ damping=(+e.target.value)/100; redraw(); };
+  document.getElementById('detune').oninput=e=>{ detune=(+e.target.value)/100; redraw(); };
+  document.getElementById('redraw').onclick=redraw;
+  document.getElementById('sound').onclick=toggleSound;
+
+  // ---------- color a lo largo del trazo ----------
+  // degradado neón cíclico cy -> mg -> pu -> bl segun la fracción del recorrido
+  const STOPS=[ [62,232,208],[155,107,255],[255,77,157],[90,169,255] ];
+  function colorAt(f){
+    const n=STOPS.length;
+    const p=f*(n-1);
+    const i=Math.min(n-2,Math.floor(p));
+    const k=p-i;
+    const a=STOPS[i],b=STOPS[i+1];
+    return [
+      Math.round(a[0]+(b[0]-a[0])*k),
+      Math.round(a[1]+(b[1]-a[1])*k),
+      Math.round(a[2]+(b[2]-a[2])*k)
+    ];
+  }
+
+  // ---------- render incremental ----------
+  const SPEED=22;           // puntos nuevos por frame
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(!trail) return;
+
+    // un ligero fade del lienzo crea estela sin borrar el trazo construido
+    // (no se usa fade global para conservar la traza completa; en su lugar dibujamos los segmentos nuevos)
+    const target=Math.min(STEPS-1, drawn+SPEED);
+
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.lineCap='round';
+    ctx.lineJoin='round';
+
+    for(let i=drawn; i<target; i++){
+      const x0=trail[i*2],     y0=trail[i*2+1];
+      const x1=trail[(i+1)*2], y1=trail[(i+1)*2+1];
+      const f=i/(STEPS-1);
+      const c=colorAt(f);
+      // intensidad baja hacia el final (la figura se apaga al converger)
+      const fade=0.35+0.65*(1-f);
+      // halo ancho y tenue
+      ctx.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},${0.06*fade})`;
+      ctx.lineWidth=9;
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+      // medio
+      ctx.strokeStyle=`rgba(${c[0]},${c[1]},${c[2]},${0.16*fade})`;
+      ctx.lineWidth=4;
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+      // núcleo brillante
+      ctx.strokeStyle=`rgba(${Math.min(255,c[0]+70)},${Math.min(255,c[1]+70)},${Math.min(255,c[2]+70)},${0.9*fade})`;
+      ctx.lineWidth=1.5;
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    }
+
+    // cabeza brillante del trazo en curso
+    if(target<STEPS-1){
+      const hx=trail[target*2], hy=trail[target*2+1];
+      const c=colorAt(target/(STEPS-1));
+      ctx.fillStyle=`rgba(${Math.min(255,c[0]+90)},${Math.min(255,c[1]+90)},${Math.min(255,c[2]+90)},0.95)`;
+      ctx.shadowColor=`rgb(${c[0]},${c[1]},${c[2]})`; ctx.shadowBlur=16;
+      ctx.beginPath(); ctx.arc(hx,hy,3.2,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    drawn=target;
+
+    // readout
+    const iv=INTERVALS[cur];
+    const f1=freq(BASE_MIDI), f2=f1*iv.a/iv.b;
+    const prog=Math.round(drawn/(STEPS-1)*100);
+    const done=drawn>=STEPS-1;
+    document.getElementById('readout').innerHTML=
+      `cociente &nbsp;<b>${iv.a}:${iv.b}</b> &nbsp;<i>${iv.t}</i><br>`+
+      `${NOTAS[BASE_MIDI%12]} ${f1.toFixed(1)} Hz &middot; ${NOTAS[(BASE_MIDI+iv.s)%12]} ${f2.toFixed(1)} Hz<br>`+
+      `amortig. <b>${(damping).toFixed(2)}</b> &middot; desajuste <b>${(detune).toFixed(2)}</b><br>`+
+      `trazo &nbsp;<b>${prog}%</b> ${done?'(amortiguado → centro)':'…'}`;
+  }
+
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

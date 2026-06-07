@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>23 · Hélice de croma — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:120px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:34px;text-align:right}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">23 · HÉLICE DE CROMA</h1>
+  <span class="sub">la altura tiene dos ejes: croma que gira, octava que sube</span>
+</div>
+<div class="panel">
+  <span class="chip" id="dbl">doble hélice</span>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">tocar</span>
+    <span class="chip" id="scaleC">cromática</span>
+    <span class="chip" id="scaleW">tonos enteros</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">rotación</span>
+    <input type="range" id="spin" min="0" max="100" value="28" step="1">
+    <span class="val" id="spinVal">28</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+  // color por clase de altura: hue = pc*30
+  function pcColor(pc,a){ return "hsla("+((pc*30)%360)+",85%,62%,"+a+")"; }
+
+  // -------------------------------------------------------------
+  // MODELO DE LA HÉLICE
+  // El cilindro es vertical. Cada nota se sitúa sobre la hélice:
+  //   ángulo  = clase de altura (croma), 12 por vuelta
+  //   altura  = octava (sube en línea recta)
+  // Cubrimos ~4 octavas a partir de C3 (MIDI 48).
+  // -------------------------------------------------------------
+  const MIDI0=48;            // C3
+  const OCTAVES=4;
+  const N=OCTAVES*12 + 1;    // notas (incluye el C final que cierra arriba)
+  const notes=[];
+  for(let i=0;i<N;i++){
+    const midi=MIDI0+i;
+    notes.push({
+      midi:midi,
+      pc:((midi%12)+12)%12,
+      step:i,                 // posición a lo largo de la hélice (en semitonos)
+      flash:0                 // resplandor temporal al sonar
+    });
+  }
+
+  // -------------------------------------------------------------
+  // AUDIO  (solo tras gesto)
+  // -------------------------------------------------------------
+  let actx=null;
+  function ctxOn(){
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==="suspended") actx.resume();
+    return actx;
+  }
+  function playMidi(midi,dur){
+    const a=ctxOn(), t=a.currentTime;
+    dur=dur||0.85;
+    const g=a.createGain();
+    g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.22,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    const o=a.createOscillator();
+    o.type="triangle";
+    o.frequency.value=freq(midi);
+    o.connect(g);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+  function flashNote(n){ n.flash=1; }
+  function hitNote(n){ playMidi(n.midi); flashNote(n); }
+
+  // -------------------------------------------------------------
+  // ESTADO
+  // -------------------------------------------------------------
+  let doble=false;           // doble hélice (tonos enteros entrelazados)
+  let spin=0.28;             // velocidad de auto-rotación (rad/s base)
+  let rot=0.4;               // ángulo de rotación acumulado (vista)
+  let dragging=false, dragRot=false, lastX=0, vel=0;
+
+  // reproducción de escala
+  let scaleSeq=null, scaleIdx=0, scaleTimer=0, scaleStep=0.34;
+
+  // -------------------------------------------------------------
+  // CANVAS
+  // -------------------------------------------------------------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  let W,H,dpr;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize",resize);
+
+  // -------------------------------------------------------------
+  // PROYECCIÓN PSEUDO-3D
+  // Cada nota -> punto 3D sobre el cilindro, girado por rot e inclinado
+  // ligeramente (tilt) para dar sensación de volumen, luego proyectado.
+  // Devuelve {x,y,depth,theta} ; depth en -1(detrás)..+1(delante).
+  // -------------------------------------------------------------
+  const TILT=0.34;           // inclinación del cilindro (radianes)
+  const cosT=Math.cos(TILT), sinT=Math.sin(TILT);
+  let projCache=[];          // se rellena cada frame
+
+  function cylRadius(){ return Math.min(W,H)*0.24; }                  // radio del cilindro
+  function stepHeight(){ return Math.min(H,760)*0.62/(OCTAVES*12); }  // altura por semitono
+
+  // Proyecta un punto del cilindro dado su ángulo de croma (theta, ya con la
+  // rotación de vista sumada) y su altura en pasos de semitono.
+  function projectAngle(theta, stepUnits){
+    const cx=W/2, cy=H/2;
+    const R=cylRadius();
+    const z3=R*Math.sin(theta);                          // profundidad cruda
+    const yRaw=(stepUnits - (OCTAVES*12)/2)*stepHeight(); // 0 abajo, sube arriba; centrado
+    // inclinación del cilindro alrededor del eje X (mezcla y/z)
+    const y3=yRaw*cosT - z3*sinT;
+    const zT=yRaw*sinT + z3*cosT;
+    return {
+      x: cx + R*Math.cos(theta),
+      y: cy - y3,
+      depth: zT/R,                                       // -1 detrás .. +1 delante
+      theta: theta
+    };
+  }
+  // Proyecta una nota: su croma define el ángulo (12 por vuelta) + rotación.
+  function project(stepUnits){
+    return projectAngle((stepUnits/12)*2*Math.PI + rot, stepUnits);
+  }
+
+  // grupos de tonos enteros
+  function isEven(pc){ return (pc%2)===0; }
+
+  // -------------------------------------------------------------
+  // RENDER
+  // -------------------------------------------------------------
+  let last=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=last? Math.min((now-last)/1000,0.05):0;
+    last=now;
+
+    // auto-rotación (suma a la inercia del arrastre)
+    if(!dragging){
+      rot += spin*dt;
+      rot += vel*dt; vel*=0.92;            // inercia residual del drag
+    }
+
+    // avanzar reproducción de escala
+    if(scaleSeq){
+      scaleTimer-=dt;
+      if(scaleTimer<=0){
+        if(scaleIdx<scaleSeq.length){
+          hitNote(scaleSeq[scaleIdx]);
+          scaleIdx++; scaleTimer=scaleStep;
+        } else { scaleSeq=null; }
+      }
+    }
+
+    // decaer flashes
+    for(let i=0;i<N;i++){ if(notes[i].flash>0) notes[i].flash=Math.max(0,notes[i].flash-dt*1.7); }
+
+    ctx.clearRect(0,0,W,H);
+
+    // eje central tenue del cilindro
+    drawAxis();
+
+    // proyectar todas las notas (mismo croma -> mismo ángulo en cada vuelta)
+    projCache.length=0;
+    for(let i=0;i<N;i++){
+      const n=notes[i];
+      projCache.push({n:n, p:project(n.step)});
+    }
+
+    // dibujar la(s) hebra(s) de la hélice (líneas que unen notas consecutivas
+    // dentro de su grupo), separando trazos traseros de delanteros por alpha.
+    if(doble) drawDoubleStrands(); else drawSingleStrand();
+
+    // dibujar los puntos ordenados por profundidad (detrás primero)
+    const order=projCache.slice().sort((a,b)=>a.p.depth-b.p.depth);
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let k=0;k<order.length;k++){
+      const it=order[k], n=it.n, p=it.p;
+      // en doble hélice cada grupo de tonos enteros es su propia hebra:
+      // pares -> cian, impares -> magenta. El tritono cae siempre en el mismo
+      // grupo y eje, mostrando por qué es el centro de simetría.
+      const baseRGB = doble ? (isEven(n.pc) ? "62,232,208" : "255,77,157") : null;
+      drawNode(n,p,baseRGB);
+    }
+    ctx.restore();
+
+    drawLegend();
+  }
+
+  function drawAxis(){
+    const cx=W/2;
+    const top=project(OCTAVES*12), bot=project(0);
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    // eje central tenue
+    ctx.strokeStyle="rgba(90,169,255,0.10)";
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(cx,top.y); ctx.lineTo(cx,bot.y); ctx.stroke();
+    // anillos guía a cada octava (círculo del cilindro proyectado a esa altura)
+    for(let o=0;o<=OCTAVES;o++){
+      const h=o*12;
+      ctx.beginPath();
+      for(let a=0;a<=48;a++){
+        const th=(a/48)*2*Math.PI + rot;
+        const p=projectAngle(th, h);
+        a?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle="rgba(123,123,160,0.10)";
+      ctx.lineWidth=1;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // hebra única: une todas las notas en orden cromático
+  function drawSingleStrand(){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let i=0;i<projCache.length-1;i++){
+      const a=projCache[i].p, b=projCache[i+1].p;
+      const front=(a.depth+b.depth)/2;
+      const al=0.10 + ((front+1)/2)*0.40;
+      ctx.strokeStyle="rgba(62,232,208,"+al.toFixed(3)+")";
+      ctx.lineWidth=1.2 + ((front+1)/2)*2.4;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // dos hebras entrelazadas: pares e impares, cada una conecta sus propias notas
+  function drawDoubleStrands(){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    [0,1].forEach(function(parity){
+      const col = parity===0 ? "62,232,208" : "255,77,157";
+      let prev=null;
+      for(let i=0;i<projCache.length;i++){
+        const it=projCache[i];
+        if((it.n.pc%2)!==parity) continue;
+        const p=it.p;
+        if(prev){
+          const front=(prev.depth+p.depth)/2;
+          const al=0.10 + ((front+1)/2)*0.42;
+          ctx.strokeStyle="rgba("+col+","+al.toFixed(3)+")";
+          ctx.lineWidth=1.2 + ((front+1)/2)*2.6;
+          ctx.beginPath(); ctx.moveTo(prev.x,prev.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+        }
+        prev=p;
+      }
+    });
+    ctx.restore();
+  }
+
+  // dibuja un nodo de nota con halo, color por croma, profundidad por alpha/tamaño
+  function drawNode(n,p,forceRGB){
+    const front=(p.depth+1)/2;             // 0 detrás .. 1 delante
+    const baseA=0.30 + front*0.62;
+    const r=3.4 + front*4.2 + n.flash*7;
+    // color del punto
+    const fill = forceRGB ? "rgba("+forceRGB+","+baseA.toFixed(3)+")" : pcColor(n.pc,baseA);
+    // halo
+    const haloR=r*3.2 + n.flash*16;
+    const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,haloR);
+    if(forceRGB){
+      g.addColorStop(0,"rgba("+forceRGB+","+(0.5*front+0.4*n.flash).toFixed(3)+")");
+      g.addColorStop(1,"rgba("+forceRGB+",0)");
+    } else {
+      g.addColorStop(0,pcColor(n.pc,0.5*front+0.45*n.flash));
+      g.addColorStop(1,pcColor(n.pc,0));
+    }
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(p.x,p.y,haloR,0,7); ctx.fill();
+    // punto
+    ctx.fillStyle=fill;
+    ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+    // etiqueta (solo bien visibles los de delante para no saturar)
+    if(front>0.34 || n.flash>0.2){
+      ctx.globalCompositeOperation="source-over";
+      const la=Math.min(1, 0.25+front*0.85+n.flash);
+      ctx.fillStyle="rgba(233,233,245,"+la.toFixed(3)+")";
+      ctx.font="600 "+(9+front*3).toFixed(1)+"px ui-monospace,Menlo,monospace";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(NOTAS[n.pc], p.x, p.y);
+      ctx.globalCompositeOperation="lighter";
+    }
+  }
+
+  function drawLegend(){
+    ctx.save();
+    ctx.font="500 12px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#7e7ea0";
+    let msg;
+    if(doble){
+      msg="dos escalas de tonos enteros entrelazadas · el tritono es el eje de simetría";
+    } else {
+      msg="arrastra para girar · clic en una nota para oírla";
+    }
+    ctx.fillText(msg, W/2, H-86);
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------
+  // INTERACCIÓN: arrastre para rotar + clic para tocar
+  // -------------------------------------------------------------
+  let downX=0;
+  function getXY(e){
+    const r=cv.getBoundingClientRect();
+    const t=(e.touches&&e.touches[0]) || (e.changedTouches&&e.changedTouches[0]) || e;
+    return {x:t.clientX-r.left, y:t.clientY-r.top};
+  }
+  function onDown(e){
+    const xy=getXY(e);
+    dragging=true; dragRot=false; lastX=xy.x; downX=xy.x;
+    cv.classList.add("drag");
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const xy=getXY(e);
+    const dx=xy.x-lastX;
+    rot += dx*0.012;
+    vel = dx*0.012*60;                    // inercia al soltar (rad/s aprox)
+    lastX=xy.x;
+    if(Math.abs(xy.x-downX)>4) dragRot=true;
+    if(e.cancelable) e.preventDefault();
+  }
+  function onUp(e){
+    if(!dragging) return;
+    dragging=false;
+    cv.classList.remove("drag");
+    // si apenas se movió -> es un clic: tocar la nota más cercana
+    if(!dragRot){
+      const xy=getXY(e);
+      pickNote(xy.x, xy.y);
+    } else {
+      vel*=0.4;                           // amortiguar la inercia
+    }
+  }
+  function pickNote(mx,my){
+    let best=null, bd=1e9;
+    for(let i=0;i<projCache.length;i++){
+      const it=projCache[i], p=it.p;
+      const d=Math.hypot(p.x-mx, p.y-my);
+      // preferimos los de delante: restamos según profundidad
+      const eff = d - (p.depth*6);
+      if(eff<bd){ bd=eff; best=it; }
+    }
+    if(best && bd<28){ hitNote(best.n); }
+  }
+  cv.addEventListener("mousedown",onDown);
+  window.addEventListener("mousemove",onMove);
+  window.addEventListener("mouseup",onUp);
+  cv.addEventListener("touchstart",onDown,{passive:false});
+  cv.addEventListener("touchmove",onMove,{passive:false});
+  cv.addEventListener("touchend",onUp);
+
+  // -------------------------------------------------------------
+  // CONTROLES (panel)
+  // -------------------------------------------------------------
+  const dblEl=document.getElementById("dbl");
+  dblEl.addEventListener("click",function(){
+    doble=!doble;
+    dblEl.classList.toggle("on",doble);
+  });
+
+  const scaleCEl=document.getElementById("scaleC");
+  const scaleWEl=document.getElementById("scaleW");
+  function startScale(kind){
+    ctxOn(); // gesto -> habilita audio
+    // construir secuencia de notas subiendo por la hélice
+    const seq=[];
+    if(kind==="croma"){
+      for(let i=0;i<N;i++) seq.push(notes[i]);
+    } else { // tonos enteros desde C
+      for(let i=0;i<N;i+=2) seq.push(notes[i]);
+    }
+    scaleSeq=seq; scaleIdx=0; scaleTimer=0;
+    scaleStep = kind==="croma" ? 0.20 : 0.30;
+    // feedback visual breve en el chip
+    const el = kind==="croma"?scaleCEl:scaleWEl;
+    el.classList.add("on");
+    setTimeout(function(){ el.classList.remove("on"); }, (seq.length*scaleStep*1000)+200);
+  }
+  scaleCEl.addEventListener("click",function(){ startScale("croma"); });
+  scaleWEl.addEventListener("click",function(){ startScale("tonos"); });
+
+  const spinEl=document.getElementById("spin"), spinVal=document.getElementById("spinVal");
+  function applySpin(){
+    const v=+spinEl.value;            // 0..100
+    spinVal.textContent=v;
+    spin=(v/100)*1.1;                 // 0 .. ~1.1 rad/s
+  }
+  spinEl.addEventListener("input",applySpin);
+  applySpin();
+
+  // -------------------------------------------------------------
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

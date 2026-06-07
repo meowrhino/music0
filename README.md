@@ -20,7 +20,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (21 piezas, agrupadas por categoría)
+## Las pruebas (24 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -42,6 +42,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 14 | [Orbifold de Tymoczko](pruebas/14-orbifold-tymoczko.html) | Una díada = un punto en una banda de Möbius; borde=unísonos, centro=tritonos. Cruza voces. | 4 | 8/10 |
 | 15 | [Orbifold de tríadas](pruebas/15-orbifold-triadas.html) | El triángulo de tipos de tríada (sección del prisma): aumentada al centro, unísonos en los vértices. | 4 | 8/10 |
 | 21 | [Collares de escalas](pruebas/21-collares-escalas.html) | Escalas como collares de 12 cuentas (Ian Ring); modos = rotaciones, patrón de intervalos + ID binario. | 1 | 7/9 |
+| 22 | [Orbifold de tétradas](pruebas/22-orbifold-tetradas.html) | El espacio de acordes de 4 notas: tetraedro 3D, séptima disminuida en el centro. | 4 | 8/10 |
 
 **II · Frecuencia, ratios y afinación**
 
@@ -52,6 +53,8 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 10 | [Lattice de entonación justa](pruebas/10-lattice-ji.html) | Retícula 5-límite (quintas × terceras justas); ratios, cents; justa vs temperada. | 2 | 8/9 |
 | 09 | [Hélice de Shepard](pruebas/09-helice-shepard.html) | Tono que sube/baja para siempre (Shepard–Risset), en espiral. | 2 | 7/9 |
 | 16 | [Cuerdas pitagóricas](pruebas/16-cuerdas-baroque.html) | Cuerdas con longitud ∝ 1/frecuencia; se pulsan en secuencia y vibran. À la Baroque.me. | 8 | 9/8 |
+| 23 | [Hélice de croma](pruebas/23-helice-croma.html) | La hélice de la altura de Shepard; doble hélice de las dos escalas de tonos enteros. | 1 | 9/8 |
+| 24 | [Armonógrafo](pruebas/24-armonografo.html) | Péndulos amortiguados que dibujan el cociente: figuras que decaen en espiral. | 2 | 9/7 |
 
 **III · Física y espectro**
 
@@ -126,7 +129,10 @@ music0/
     ├── 18-cromagrama.html
     ├── 19-espectrograma.html
     ├── 20-batido.html
-    └── 21-collares-escalas.html
+    ├── 21-collares-escalas.html
+    ├── 22-orbifold-tetradas.html
+    ├── 23-helice-croma.html
+    └── 24-armonografo.html
 ```
 
 ## Stack
