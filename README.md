@@ -64,6 +64,13 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 06 | [Curva de disonancia](pruebas/06-curva-disonancia.html) | Modelo Plomp–Levelt/Sethares; valles = consonancia. Arrastra y oye. | 6 | 8/10 |
 | 07 | [Color ↔ nota](pruebas/07-color-scriabin.html) | Círculo de quintas con los colores de Scriabin / el arcoíris sinestésico. | 7 | 8/7 |
 
+## Capa de color compartida
+
+El círculo cromático (02), el Tonnetz (03), el Tonnetz+ (11) y el toro (12) comparten un **selector de
+paleta** (arriba a la derecha: croma / **Scriabin** / 5tas). La elección se guarda en `localStorage`,
+así que cambiarla en una pieza **tiñe todas las demás** — una capa de color común sin romper la
+autonomía de cada `.html`. El mapa de Scriabin es el mismo de la pieza 07.
+
 ## Rumbos posibles (la "web loquita")
 
 - **A · Galería + navegador** ✦ *(aquí vivimos)* — mini-experimentos autónomos + este `index.html`.
@@ -77,7 +84,6 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 
 ## Ideas para el siguiente lote
 
-- **Color como capa compartida**: teñir el círculo cromático, el Tonnetz y el toro con el mapa de Scriabin.
 - **Orbifold de tríadas** (3 notas): el prisma triangular/toroide de Tymoczko, siguiente nivel tras la díada.
 - **Ensayo explorable (C)** completo: scrollytelling que hila las piezas con texto (modelo osar.fr).
 - Pulir **responsive**: en móvil vertical el panel inferior tapa parte de la figura en algunas piezas.
