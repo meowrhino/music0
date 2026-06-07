@@ -20,7 +20,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (18 piezas, agrupadas por categoría)
+## Las pruebas (21 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -41,6 +41,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 12 | [Tonnetz toroidal](pruebas/12-tonnetz-toro.html) | La retícula envuelta en un toro 3D navegable (Z₁₂ ≅ Z₃×Z₄). Gira + PLR. | 4 | 9/10 |
 | 14 | [Orbifold de Tymoczko](pruebas/14-orbifold-tymoczko.html) | Una díada = un punto en una banda de Möbius; borde=unísonos, centro=tritonos. Cruza voces. | 4 | 8/10 |
 | 15 | [Orbifold de tríadas](pruebas/15-orbifold-triadas.html) | El triángulo de tipos de tríada (sección del prisma): aumentada al centro, unísonos en los vértices. | 4 | 8/10 |
+| 21 | [Collares de escalas](pruebas/21-collares-escalas.html) | Escalas como collares de 12 cuentas (Ian Ring); modos = rotaciones, patrón de intervalos + ID binario. | 1 | 7/9 |
 
 **II · Frecuencia, ratios y afinación**
 
@@ -59,6 +60,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 05 | [Cymatics / Chladni](pruebas/05-cymatics-chladni.html) | 12 000 granos posándose en las líneas nodales del modo (n, m). | 3 | 9/8 |
 | 08 | [Mandala FFT](pruebas/08-mandala-fft.html) | El espectro dibuja un mandala radial que late; con micrófono opcional. | 5 | 9/5 |
 | 18 | [Cromagrama](pruebas/18-cromagrama.html) | El espectro plegado en 12 clases de altura; círculo de croma + cromagrama desplazante. Con micro. | 5 | 8/8 |
+| 19 | [Espectrograma](pruebas/19-espectrograma.html) | El espectro en cascada: tiempo en X, frecuencia (log) en Y, brillo = energía. Con micro. | 5 | 8/6 |
 
 **IV · Psicoacústica y color**
 
@@ -67,6 +69,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 06 | [Curva de disonancia](pruebas/06-curva-disonancia.html) | Modelo Plomp–Levelt/Sethares; valles = consonancia. Arrastra y oye. | 6 | 8/10 |
 | 07 | [Color ↔ nota](pruebas/07-color-scriabin.html) | Círculo de quintas con los colores de Scriabin / el arcoíris sinestésico. | 7 | 8/7 |
 | 17 | [Heatmap de disonancia](pruebas/17-heatmap-disonancia.html) | Mapa 2D de disonancia sensorial de tríadas (Sethares); los valles = consonancia. | 6 | 8/9 |
+| 20 | [Batido de dos tonos](pruebas/20-batido.html) | Dos tonos cercanos y su envolvente pulsando: del unísono a la aspereza (banda crítica). | 6 | 8/8 |
 
 ## Capa de color compartida
 
@@ -89,15 +92,17 @@ autonomía de cada `.html`. El mapa de Scriabin es el mismo de la pieza 07.
 
 ## Ideas para el siguiente lote
 
-- **Modo E (hub mixto)** completo: fundir galería + ensayo + pieza destacada en una sola experiencia.
-- Pulir **responsive** en el resto de piezas (móvil vertical) y aplicar los remates "baja" pendientes.
-- Más profundidad: orbifold de tétradas (4 notas), Chladni 3D (marching cubes), espectrograma.
+- **Modo E** a tope: una portada-experiencia que funda hero en vivo + ensayo + galería en un solo scroll.
+- Más profundidad: orbifold de tétradas (4 notas), Chladni 3D (marching cubes), hélice de croma doble.
+- Detalles "baja" pendientes de las revisiones (etiquetas, guards) y unificar la capa de color en todas.
 
 ## Estructura
 
 ```
 music0/
-├── index.html              ← navegador / galería
+├── index.html              ← navegador / galería (el hub)
+├── ensayo.html             ← ensayo explorable (scrollytelling)
+├── sobre.html              ← sobre el proyecto + créditos
 ├── investigacion.md         ← investigación de partida
 ├── README.md
 └── pruebas/
@@ -118,7 +123,10 @@ music0/
     ├── 15-orbifold-triadas.html
     ├── 16-cuerdas-baroque.html
     ├── 17-heatmap-disonancia.html
-    └── 18-cromagrama.html
+    ├── 18-cromagrama.html
+    ├── 19-espectrograma.html
+    ├── 20-batido.html
+    └── 21-collares-escalas.html
 ```
 
 ## Stack

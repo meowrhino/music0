@@ -22,6 +22,10 @@
     text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:8px 13px;background:#0c0c18cc;
     backdrop-filter:blur(8px);transition:.2s}
   .back:hover{color:var(--cy);border-color:var(--cy)}
+  .topnav{position:fixed;top:14px;right:16px;z-index:30;display:flex;gap:6px}
+  .topnav a{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;
+    border-radius:20px;padding:8px 13px;background:#0c0c18cc;backdrop-filter:blur(8px);transition:.2s}
+  .topnav a:hover{color:var(--cy);border-color:var(--cy)}
 
   .hero{min-height:96vh;display:flex;flex-direction:column;justify-content:center;
     max-width:900px;margin:0 auto;padding:80px 24px 40px}
@@ -71,6 +75,7 @@
 <body>
 <div id="prog"></div>
 <a class="back" href="index.html">← galería</a>
+<div class="topnav"><a href="sobre.html">sobre</a></div>
 
 <header class="hero">
   <div class="kicker">music0 · ensayo explorable</div>

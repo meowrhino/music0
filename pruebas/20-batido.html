@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>20 · BATIDO DE DOS TONOS — music0</title>
+<style>
+  :root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+  input[type=range]{width:120px;height:4px;background:#1a1a2e;border-radius:3px;outline:none}
+  .val{font:700 12px var(--mono);color:var(--cy);min-width:60px}
+  .readout{position:fixed;left:18px;top:62px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim);pointer-events:none}
+  .readout b{color:var(--txt);font-weight:700} .readout .d{color:var(--mg)}
+  .zone{position:fixed;right:18px;top:62px;z-index:5;text-align:right;pointer-events:none}
+  .zone .zname{font:700 16px/1.2 var(--mono);letter-spacing:.04em}
+  .zone .zdesc{font:500 11px/1.6 var(--mono);color:var(--dim);max-width:240px;margin-top:4px}
+  .meter{position:fixed;right:18px;top:130px;z-index:5;width:200px;pointer-events:none}
+  .meter .bar{height:8px;border-radius:5px;background:linear-gradient(90deg,var(--cy) 0%,var(--yl) 35%,var(--mg) 62%,var(--pu) 100%);position:relative;opacity:.35}
+  .meter .needle{position:absolute;top:-4px;width:3px;height:16px;background:#fff;border-radius:2px;box-shadow:0 0 8px #fff}
+  .meter .ticks{display:flex;justify-content:space-between;font:600 9px var(--mono);color:var(--dim);margin-top:5px}
+  @media(max-width:680px){
+    .panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}
+    .panel .grp{flex-wrap:nowrap}
+    .readout{font-size:10px;top:54px}
+    .zone .zname{font-size:13px} .zone .zdesc{display:none}
+    .meter{width:140px;top:104px}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">&larr; galería</a>
+  <h1 class="title">20 · BATIDO DE DOS TONOS</h1>
+  <span class="sub">pulsaciones · banda crítica de Plomp-Levelt</span>
+</div>
+
+<div class="readout" id="readout"></div>
+
+<div class="zone">
+  <div class="zname" id="zname">—</div>
+  <div class="zdesc" id="zdesc">Pulsa SONAR y mueve Δ.</div>
+</div>
+
+<div class="meter">
+  <div class="bar"><div class="needle" id="needle" style="left:0%"></div></div>
+  <div class="ticks"><span>0</span><span>10</span><span>20</span><span>30</span><span>40</span></div>
+</div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="chip" id="btnSound">▶ sonar</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">f1</span>
+    <input type="range" id="f1" min="220" max="440" step="1" value="300">
+    <span class="val" id="f1v">300 Hz</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">Δ</span>
+    <input type="range" id="delta" min="0" max="40" step="0.1" value="3">
+    <span class="val" id="dv">3.0 Hz</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">preset</span>
+    <span class="chip" id="pUni">unísono</span>
+    <span class="chip" id="pLento">batido lento</span>
+    <span class="chip" id="pAspero">aspereza</span>
+    <span class="chip" id="pSep">separados</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+  function nombreNota(f){
+    var midi=Math.round(69+12*Math.log2(f/440));
+    return NOTAS[((midi%12)+12)%12]+(Math.floor(midi/12)-1);
+  }
+
+  // ---- estado ----
+  var f1=300, delta=3.0, playing=false;
+  function f2(){return f1+delta;}
+
+  // ---- canvas ----
+  var canvas=document.getElementById("c");
+  var ctx=canvas.getContext("2d");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=window.innerWidth; H=window.innerHeight;
+    canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",resize);
+  resize();
+
+  // ---- audio ----
+  var actx=null, osc1=null, osc2=null, g1=null, g2=null, master=null;
+  function ensureAudio(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      master=actx.createGain();
+      master.gain.value=0.0;
+      master.connect(actx.destination);
+      g1=actx.createGain(); g2=actx.createGain();
+      g1.gain.value=0.5; g2.gain.value=0.5;
+      osc1=actx.createOscillator(); osc2=actx.createOscillator();
+      osc1.type="sine"; osc2.type="sine";
+      osc1.frequency.value=f1; osc2.frequency.value=f2();
+      osc1.connect(g1).connect(master);
+      osc2.connect(g2).connect(master);
+      osc1.start(); osc2.start();
+    }
+  }
+  function setFreqs(){
+    if(osc1&&osc2){
+      var t=actx.currentTime;
+      osc1.frequency.setTargetAtTime(f1,t,0.02);
+      osc2.frequency.setTargetAtTime(f2(),t,0.02);
+    }
+  }
+  function toggleSound(){
+    ensureAudio();
+    if(actx.state==="suspended"){ actx.resume(); }
+    playing=!playing;
+    var t=actx.currentTime;
+    master.gain.cancelScheduledValues(t);
+    master.gain.setTargetAtTime(playing?0.32:0.0,t,0.05);
+    setFreqs();
+    btnSound.classList.toggle("on",playing);
+    btnSound.textContent=playing?"■ silenciar":"▶ sonar";
+  }
+
+  // ---- zonas según Δ ----
+  function zona(d){
+    if(d<0.5) return {n:"UNÍSONO",c:"var(--cy)",cc:"#3ee8d0",
+      d:"Δ≈0: los dos tonos coinciden, no hay batido perceptible."};
+    if(d<8) return {n:"BATIDO LENTO",c:"var(--bl)",cc:"#5aa9ff",
+      d:"Δ 1-8 Hz: la amplitud pulsa lentamente (“wah-wah”). Suena agradable."};
+    if(d<12) return {n:"BATIDO RÁPIDO",c:"var(--yl)",cc:"#e9ff5a",
+      d:"Δ 8-12 Hz: la pulsación se acelera y empieza a notarse áspera."};
+    if(d<=30) return {n:"ASPEREZA MÁXIMA",c:"var(--mg)",cc:"#ff4d9d",
+      d:"Δ ~15-30 Hz: rugosidad máxima dentro de la banda crítica (Plomp-Levelt). Disonancia."};
+    return {n:"DOS TONOS",c:"var(--pu)",cc:"#9b6bff",
+      d:"Δ grande: el oído separa f1 y f2 como dos alturas distintas; la rugosidad decae."};
+  }
+
+  // ---- UI refs ----
+  var btnSound=document.getElementById("btnSound");
+  var sF1=document.getElementById("f1"), sD=document.getElementById("delta");
+  var f1v=document.getElementById("f1v"), dv=document.getElementById("dv");
+  var readout=document.getElementById("readout");
+  var zname=document.getElementById("zname"), zdesc=document.getElementById("zdesc");
+  var needle=document.getElementById("needle");
+
+  function updateUI(){
+    f1v.textContent=Math.round(f1)+" Hz";
+    dv.textContent=delta.toFixed(1)+" Hz";
+    var z=zona(delta);
+    zname.textContent=z.n; zname.style.color=z.c;
+    zdesc.textContent=z.d;
+    needle.style.left=(Math.min(40,delta)/40*100)+"%";
+    var per=delta>0.01 ? (1000/delta).toFixed(0)+" ms" : "∞";
+    readout.innerHTML=
+      "f1 = <b>"+Math.round(f1)+" Hz</b> ("+nombreNota(f1)+")<br>"+
+      "f2 = <b>"+Math.round(f2())+" Hz</b> ("+nombreNota(f2())+")<br>"+
+      "Δ = <span class=\"d\">"+delta.toFixed(1)+" Hz</span><br>"+
+      "periodo batido 1/Δ = <b>"+per+"</b>";
+  }
+
+  btnSound.addEventListener("click",toggleSound);
+  sF1.addEventListener("input",function(){ f1=parseFloat(sF1.value); setFreqs(); updateUI(); });
+  sD.addEventListener("input",function(){ delta=parseFloat(sD.value); setFreqs(); updateUI(); });
+
+  function applyPreset(nf1,nd){
+    f1=nf1; delta=nd;
+    sF1.value=String(nf1); sD.value=String(nd);
+    setFreqs(); updateUI();
+    if(!playing) toggleSound();
+  }
+  document.getElementById("pUni").addEventListener("click",function(){applyPreset(300,0);});
+  document.getElementById("pLento").addEventListener("click",function(){applyPreset(300,3);});
+  document.getElementById("pAspero").addEventListener("click",function(){applyPreset(300,22);});
+  document.getElementById("pSep").addEventListener("click",function(){applyPreset(300,40);});
+
+  // ---- bucle de dibujo ----
+  // Ventana temporal: queremos ver al menos un ciclo de batido (1/Δ) y a la vez
+  // resolver el detalle de la portadora. Escala la ventana con Δ.
+  var t0=performance.now();
+
+  function draw(now){
+    var elapsed=(now-t0)/1000; // segundos transcurridos (avanza la onda)
+    ctx.clearRect(0,0,W,H);
+
+    var z=zona(delta);
+
+    // -- fondo: linea base tenue --
+    var midY=H*0.52;
+    ctx.strokeStyle="#15152a";
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(0,midY); ctx.lineTo(W,midY); ctx.stroke();
+
+    // ventana temporal mostrada (s). Si Δ pequeño, ventana larga para ver el batido;
+    // si Δ grande, ventana corta para no saturar de ciclos.
+    var winSec;
+    if(delta<0.5) winSec=0.04;
+    else winSec=Math.max(0.06, Math.min(2.0, 2.0/delta));
+
+    var f1c=f1, f2c=f2();
+    var amp=H*0.20;
+    var N=Math.max(800, Math.floor(W)); // muestras a lo ancho
+
+    // velocidad de avance temporal: lenta para apreciar el batido
+    var tStart=elapsed*0.5;
+
+    // ---- envolvente |2 cos(pi Δ t)| (tenue) ----
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    function envAt(tt){ return Math.abs(2*Math.cos(Math.PI*delta*tt)); }
+    var envScale=amp/2; // 2*cos -> max 2; escalar a amp
+    ctx.strokeStyle="rgba(155,107,255,0.30)";
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(var i=0;i<=N;i++){
+      var tt=tStart+(i/N)*winSec;
+      var e=envAt(tt)*envScale;
+      var x=(i/N)*W, y=midY-e;
+      if(i===0)ctx.moveTo(x,y); else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    ctx.beginPath();
+    for(var j=0;j<=N;j++){
+      var tt2=tStart+(j/N)*winSec;
+      var e2=envAt(tt2)*envScale;
+      var x2=(j/N)*W, y2=midY+e2;
+      if(j===0)ctx.moveTo(x2,y2); else ctx.lineTo(x2,y2);
+    }
+    ctx.stroke();
+    ctx.restore();
+
+    // ---- onda suma y(t)=sin(2pi f1 t)+sin(2pi f2 t) (glow) ----
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.lineJoin="round"; ctx.lineCap="round";
+    var col=z.cc;
+    // capa de brillo ancha
+    for(var pass=0;pass<2;pass++){
+      ctx.beginPath();
+      for(var k=0;k<=N;k++){
+        var t=tStart+(k/N)*winSec;
+        var y0=Math.sin(2*Math.PI*f1c*t)+Math.sin(2*Math.PI*f2c*t); // -2..2
+        var xx=(k/N)*W;
+        var yy=midY-(y0/2)*amp;
+        if(k===0)ctx.moveTo(xx,yy); else ctx.lineTo(xx,yy);
+      }
+      if(pass===0){ ctx.strokeStyle=col; ctx.globalAlpha=0.18; ctx.lineWidth=9; }
+      else { ctx.strokeStyle=col; ctx.globalAlpha=0.95; ctx.lineWidth=2; }
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // ---- indicador de la "boca" del batido: punto en el pico de envolvente ----
+    // marca dónde la envolvente cruza por máximo dentro de la ventana (visual)
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle="rgba(255,255,255,0.06)";
+    if(delta>0.5){
+      // sombreado vertical donde la envolvente es baja (silencios del batido)
+      for(var m=0;m<=N;m+=4){
+        var tm=tStart+(m/N)*winSec;
+        var em=envAt(tm); // 0..2
+        if(em<0.25){
+          var xm=(m/N)*W;
+          ctx.fillRect(xm,0,(1/N)*W*4+1,H);
+        }
+      }
+    }
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+
+  updateUI();
+  requestAnimationFrame(draw);
+
+})();
+</script>
+</body>
+</html>

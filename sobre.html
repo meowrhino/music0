@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>music0 · sobre el proyecto</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#eaeaf6; --dim:#9a9ab8;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);line-height:1.7;-webkit-font-smoothing:antialiased}
+  /* nav compartida */
+  nav.site{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;
+    padding:12px 18px;background:#06060dcc;backdrop-filter:blur(10px);border-bottom:1px solid #16162c}
+  nav.site .brand{font:800 14px var(--mono);letter-spacing:.04em;
+    background:linear-gradient(92deg,var(--cy),var(--pu),var(--mg));-webkit-background-clip:text;background-clip:text;color:transparent;margin-right:auto}
+  nav.site a{font:600 12px var(--mono);color:var(--dim);text-decoration:none;padding:7px 11px;border-radius:9px;
+    border:1px solid transparent;transition:.15s}
+  nav.site a:hover{color:var(--txt);border-color:#2a2a44}
+  nav.site a.here{color:#06060d;background:var(--cy)}
+
+  .wrap{max-width:780px;margin:0 auto;padding:54px 24px 90px}
+  .kicker{font:600 12px var(--mono);letter-spacing:.32em;color:var(--cy);text-transform:uppercase}
+  h1{font:800 clamp(36px,7vw,64px)/1 var(--sans);letter-spacing:-.02em;margin:12px 0 18px;
+    background:linear-gradient(92deg,var(--cy),var(--pu) 50%,var(--mg));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .lede{font-size:19px;color:#c8c8de;max-width:660px}
+  h2{font:750 24px var(--sans);margin:44px 0 12px;letter-spacing:-.01em}
+  p{font-size:16.5px;color:#c4c4da;margin:0 0 14px} p b{color:var(--txt)}
+  a.inline{color:var(--cy);text-decoration:none;border-bottom:1px solid #234} a.inline:hover{border-color:var(--cy)}
+  ul{list-style:none;margin:0 0 14px} li{padding:8px 0;border-bottom:1px solid #13132a;font-size:16px;color:#c4c4da}
+  li b{color:var(--txt)} li .t{color:var(--cy);font:600 12px var(--mono)}
+  .cats{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin:6px 0 8px}
+  .cat{background:#0b0b16;border:1px solid #1a1a30;border-radius:12px;padding:13px 15px}
+  .cat h3{font:700 13px var(--mono);color:var(--yl);margin-bottom:3px} .cat p{font-size:13.5px;margin:0;color:#9a9ab6}
+  .tags{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0 8px}
+  .tag{font:600 11px var(--mono);color:var(--dim);border:1px solid #25253f;border-radius:8px;padding:5px 9px}
+  .rumbos{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:6px}
+  .rumbo{background:#0b0b16;border:1px solid #1a1a30;border-radius:12px;padding:13px}
+  .rumbo h3{font:700 13px var(--mono);color:var(--cy);margin-bottom:4px}
+  .rumbo p{font-size:13px;margin:0;color:#9a9ab6}
+  footer{border-top:1px solid #16162c;color:#55557a;font:400 13px var(--sans);margin-top:50px;padding-top:22px}
+  footer a{color:var(--cy);text-decoration:none}
+</style>
+</head>
+<body>
+<nav class="site">
+  <a class="brand" href="index.html">music0</a>
+  <a href="index.html">galería</a>
+  <a href="ensayo.html">ensayo</a>
+  <a class="here" href="sobre.html">sobre</a>
+</nav>
+
+<div class="wrap">
+  <div class="kicker">sobre el proyecto</div>
+  <h1>Ver la armonía</h1>
+  <p class="lede"><b>music0</b> es una colección de juguetes interactivos para <b>ver y oír</b> la teoría
+    musical: intervalos, acordes, escalas, afinación, consonancia, espacios de acordes y un poco de
+    física y color. 21 piezas y un ensayo, todo navegable desde la <a class="inline" href="index.html">galería</a>.</p>
+
+  <h2>Cómo está hecho</h2>
+  <p>Cada pieza es un único archivo <b>.html autónomo</b>: HTML + CSS + JavaScript en línea, con
+    <b>Canvas 2D</b> y la <b>Web Audio API</b>. <b>Sin frameworks, sin CDNs, sin red</b> — funciona
+    abriendo el archivo directamente. Es deliberado: son piezas portables y fáciles de hackear.</p>
+  <div class="tags">
+    <span class="tag">Vanilla JS</span><span class="tag">Canvas 2D</span><span class="tag">Web Audio API</span>
+    <span class="tag">Web MIDI</span><span class="tag">getUserMedia (FFT)</span><span class="tag">0 dependencias</span>
+  </div>
+  <p>Comparten una <b>capa de color</b> (croma / Scriabin / quintas) que se guarda en <code>localStorage</code>:
+    cámbiala en una pieza y se tiñen las demás. Y un <a class="inline" href="ensayo.html">ensayo explorable</a>
+    las hila con narrativa, incrustándolas como widgets.</p>
+
+  <h2>Las ocho vetas de la investigación</h2>
+  <div class="cats">
+    <div class="cat"><h3>1 · geometría</h3><p>círculos, polígonos, mandalas de acordes y escalas</p></div>
+    <div class="cat"><h3>2 · ratios y afinación</h3><p>Lissajous, armónicos, entonación justa, Shepard</p></div>
+    <div class="cat"><h3>3 · cimática</h3><p>placas de Chladni, líneas nodales</p></div>
+    <div class="cat"><h3>4 · neo-riemanniana</h3><p>Tonnetz, toro, orbifolds de Tymoczko</p></div>
+    <div class="cat"><h3>5 · espectral</h3><p>FFT, mandala, cromagrama, espectrograma</p></div>
+    <div class="cat"><h3>6 · psicoacústica</h3><p>disonancia de Plomp–Levelt / Sethares, batido</p></div>
+    <div class="cat"><h3>7 · color</h3><p>Scriabin, sinestesia, coloreado armónico</p></div>
+    <div class="cat"><h3>8 · creative coders</h3><p>Baroque.me, MTA.me (Alexander Chen)</p></div>
+  </div>
+  <p>El catálogo completo está en <a class="inline" href="investigacion.md">investigacion.md</a>.</p>
+
+  <h2>De quién es esta geometría</h2>
+  <p>Las piezas se apoyan en el trabajo de mucha gente. Lo justo es nombrarles:</p>
+  <ul>
+    <li><b>Dmitri Tymoczko</b> — <span class="t">orbifolds</span> los acordes como puntos en espacios geométricos (“The Geometry of Musical Chords”, <em>Science</em>, 2006). → piezas 14 y 15.</li>
+    <li><b>R. Plomp &amp; W. Levelt</b> y <b>William Sethares</b> — <span class="t">disonancia</span> el modelo de consonancia sensorial y banda crítica. → piezas 06, 17 y 20.</li>
+    <li><b>Aleksandr Scriabin</b> (vía L. Sabaneyev, 1911) — <span class="t">color</span> un color para cada tonalidad. → pieza 07 y la capa de color.</li>
+    <li><b>Alexander Chen</b> — <span class="t">creative coding</span> Baroque.me y MTA.me: la armonía como geometría animada. → pieza 16.</li>
+    <li><b>Ian Ring</b> — <span class="t">escalas</span> la notación de collar y el catálogo de escalas. → pieza 21.</li>
+    <li><b>Roger Shepard</b> — <span class="t">percepción</span> la hélice de la altura y el tono que sube sin fin. → pieza 09.</li>
+    <li><b>Hugo Riemann</b> y la tradición <b>neo-riemanniana</b> — <span class="t">Tonnetz</span> la retícula de tríadas y las transformaciones P/L/R. → piezas 03, 11, 12.</li>
+    <li><b>Stephen Malinowski</b> (Music Animation Machine) — <span class="t">visualización</span> el coloreado armónico que inspira todo esto.</li>
+  </ul>
+
+  <h2>Hacia dónde va</h2>
+  <div class="rumbos">
+    <div class="rumbo"><h3>A · galería ✦</h3><p>el navegador de todas las piezas</p></div>
+    <div class="rumbo"><h3>B · showpiece ✦</h3><p>Tonnetz 3D, orbifolds de díadas y tríadas</p></div>
+    <div class="rumbo"><h3>C · ensayo ✦</h3><p>el paseo narrativo explorable</p></div>
+    <div class="rumbo"><h3>D · instrumento ✦</h3><p>tocas y todo reacciona</p></div>
+    <div class="rumbo"><h3>E · hub ◐</h3><p>fundirlo todo en una experiencia</p></div>
+  </div>
+
+  <footer>
+    music0 · <a href="index.html">galería</a> · <a href="ensayo.html">ensayo</a> ·
+    <a href="investigacion.md">investigación</a> · <a href="README.md">readme</a><br>
+    Hecho con Canvas + Web Audio, sin dependencias.
+  </footer>
+</div>
+</body>
+</html>

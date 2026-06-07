@@ -15,6 +15,10 @@
   body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;
     overflow-x:hidden;-webkit-font-smoothing:antialiased}
   #bg{position:fixed;inset:0;z-index:0;opacity:.5}
+  .topnav{position:fixed;top:14px;right:18px;z-index:20;display:flex;gap:6px}
+  .topnav a{font:600 12px var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;
+    border-radius:20px;padding:8px 13px;background:#0c0c18cc;backdrop-filter:blur(8px);transition:.2s}
+  .topnav a:hover{color:var(--cy);border-color:var(--cy)}
   .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:64px 24px 80px}
   header{margin-bottom:40px}
   .kicker{font:600 12px var(--mono);letter-spacing:.34em;color:var(--cy);text-transform:uppercase}
@@ -78,6 +82,7 @@
 </head>
 <body>
 <canvas id="bg"></canvas>
+<div class="topnav"><a href="ensayo.html">ensayo</a><a href="sobre.html">sobre</a></div>
 <div class="wrap">
   <header>
     <div class="kicker">music0 · galería</div>
@@ -177,6 +182,15 @@
     '18':{ac:'#ff4d9d',ttl:'Cromagrama',cat:'cat. 5',vi:8,cd:8,
       d:'El espectro plegado en las 12 clases de altura en tiempo real: círculo de croma + cromagrama desplazante. Con micrófono opcional.',
       tags:['Canvas','Web Audio','FFT'],href:'pruebas/18-cromagrama.html'},
+    '19':{ac:'#5aa9ff',ttl:'Espectrograma',cat:'cat. 5',vi:8,cd:6,
+      d:'El espectro en cascada: el tiempo fluye en X, la frecuencia (log) en Y, el brillo es energía. Con micrófono.',
+      tags:['Canvas','Web Audio','FFT'],href:'pruebas/19-espectrograma.html'},
+    '20':{ac:'#ff4d9d',ttl:'Batido de dos tonos',cat:'cat. 6',vi:8,cd:8,
+      d:'Dos tonos cercanos y su envolvente pulsando: del unísono al batido lento y a la aspereza de la banda crítica.',
+      tags:['Canvas','Web Audio'],href:'pruebas/20-batido.html'},
+    '21':{ac:'#e9ff5a',ttl:'Collares de escalas',cat:'cat. 1',vi:7,cd:9,
+      d:'Escalas como collares de 12 cuentas (notación de Ian Ring); los modos son rotaciones, con su patrón de intervalos e ID binario.',
+      tags:['Canvas','Web Audio'],href:'pruebas/21-collares-escalas.html'},
   };
   const SECTIONS=[
     {idx:'★', t:'Instrumento en vivo',
@@ -184,16 +198,16 @@
       keys:['13']},
     {idx:'I', t:'Geometría de acordes y tríadas',
       b:'Las notas como puntos; los acordes como formas. Polígonos, triángulos, la retícula envuelta en un toro… y los acordes como puntos en un orbifold.',
-      keys:['02','03','11','12','14','15']},
+      keys:['02','03','11','12','14','15','21']},
     {idx:'II', t:'Frecuencia, ratios y afinación',
       b:'La música como números: cocientes simples, sobretonos, entonación justa frente al temperamento igual, e ilusiones de altura.',
       keys:['01','04','10','09','16']},
     {idx:'III', t:'Física y espectro',
       b:'El sonido hecho materia y luz: placas vibrantes y el espectro en tiempo real.',
-      keys:['05','08','18']},
+      keys:['05','08','18','19']},
     {idx:'IV', t:'Psicoacústica y color',
       b:'Por qué algo suena consonante, y cómo el oído se vuelve color.',
-      keys:['06','07','17']},
+      keys:['06','07','17','20']},
   ];
 
   // contador

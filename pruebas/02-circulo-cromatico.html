@@ -66,6 +66,7 @@
   <div class="sep"></div>
   <span class="chip" id="play">▶ tocar</span>
   <span class="chip" id="clear">limpiar</span>
+  <span class="chip" id="midi">🎹 MIDI</span>
 </div>
 
 <script>
@@ -171,6 +172,7 @@
   }
 
   // ---------- render ----------
+  const midiOn=new Set();   // notas tocadas por MIDI (overlay en vivo)
   function draw(){
     requestAnimationFrame(draw);
     ctx.clearRect(0,0,W,H);
@@ -201,6 +203,8 @@
       ctx.font='600 12px '+getComputedStyle(document.body).getPropertyValue('--mono');
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(NOTE[nd.pc],nd.x,nd.y);
+      if(midiOn.has(nd.pc)){ ctx.strokeStyle='#e9ff5a';ctx.lineWidth=2.5;
+        ctx.beginPath();ctx.arc(nd.x,nd.y,(on?16:11)+5,0,7);ctx.stroke(); }
     });
   }
 
@@ -240,6 +244,20 @@
   document.getElementById('play').onclick=playChord;
   document.getElementById('clear').onclick=()=>{selected.clear();lastPreset=null;
     [...pre.children].forEach(c=>c.classList.remove('on'));refreshName();};
+
+  // ---------- Web MIDI (overlay en vivo) ----------
+  function onMIDI(e){ const d=e.data, cmd=d[0]&0xf0, pc=d[1]%12;
+    if(cmd===0x90 && d[2]>0){ midiOn.add(pc); playNote(pc); }
+    else if(cmd===0x80 || (cmd===0x90 && d[2]===0)){ midiOn.delete(pc); } }
+  document.getElementById('midi').onclick=function(){
+    if(!navigator.requestMIDIAccess){ this.textContent='sin Web MIDI'; return; }
+    ctxOn();
+    navigator.requestMIDIAccess().then(acc=>{
+      const bind=()=>acc.inputs.forEach(i=>i.onmidimessage=onMIDI);
+      bind(); acc.onstatechange=bind;
+      this.classList.add('on'); this.textContent='🎹 MIDI ✓';
+    }).catch(()=>{ this.textContent='MIDI denegado'; });
+  };
 
   resize();
   applyPreset(0,true); // C mayor de salida

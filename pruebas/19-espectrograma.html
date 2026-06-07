@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>19 · Espectrograma (waterfall) — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:96px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:30px;text-align:right}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim)}
+  .readout b{color:var(--cy)}
+  .msg{position:fixed;left:50%;top:64px;transform:translateX(-50%);z-index:7;
+    font:600 12px/1.4 var(--mono);color:var(--mg);background:#0c0c18ee;border:1px solid #3a2030;
+    border-radius:10px;padding:8px 12px;max-width:80vw;text-align:center;opacity:0;
+    transition:opacity .3s;pointer-events:none}
+  .msg.show{opacity:1}
+  @media(max-width:620px){.readout{display:none}}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">19 · ESPECTROGRAMA (WATERFALL)</h1>
+  <span class="sub">el tiempo fluye y el espectro cae en cascada</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="msg" id="msg"></div>
+<div class="panel">
+  <span class="chip" id="sound">▶ sonar</span>
+  <span class="chip" id="mic">🎤 micrófono</span>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">ganancia</span>
+    <input type="range" id="gain" min="0.5" max="3" step="0.05" value="1.3">
+    <span class="val" id="gainv">1.3</span>
+  </div>
+  <div class="grp"><span class="lbl">contraste</span>
+    <input type="range" id="contrast" min="0.6" max="2.4" step="0.05" value="1.2">
+    <span class="val" id="contrastv">1.2</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  // ---------- helpers ----------
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+
+  // ---------- rango de frecuencia (escala logarítmica musical) ----------
+  const F_MIN=50, F_MAX=8000;
+  const LOG_MIN=Math.log2(F_MIN), LOG_MAX=Math.log2(F_MAX);
+  // y=0 arriba (F_MAX), y=1 abajo (F_MIN)
+  function freqToY01(f){
+    if(f<=0)return 1;
+    const t=(Math.log2(f)-LOG_MIN)/(LOG_MAX-LOG_MIN);
+    return 1-Math.max(0,Math.min(1,t)); // invertido: agudo arriba
+  }
+
+  // ---------- canvas + dpr ----------
+  const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+  let W,H,dpr;
+  // buffer propio del espectrograma (en px CSS, sin dpr) que vamos desplazando
+  let spec=document.createElement('canvas');
+  let sctx=spec.getContext('2d');
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;
+    cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.imageSmoothingEnabled=false;
+    // reajusta el buffer del espectrograma conservando lo posible al re-crear
+    const prev=spec;
+    spec=document.createElement('canvas');
+    spec.width=Math.max(1,W);spec.height=Math.max(1,H);
+    sctx=spec.getContext('2d');
+    sctx.imageSmoothingEnabled=false;
+    sctx.fillStyle='#04040a';sctx.fillRect(0,0,spec.width,spec.height);
+    try{sctx.drawImage(prev,0,0,prev.width,prev.height,0,0,spec.width,spec.height);}catch(e){}
+  }
+  window.addEventListener('resize',resize);
+
+  // ---------- audio ----------
+  let actx=null, analyser=null, freqData=null;
+  let masterGain=null, internalGain=null;
+  let internalOn=false, micOn=false, micStream=null, micSource=null;
+  let voices=[]; // osciladores activos
+  let noteTimer=0, noteIdx=0;
+
+  // melodía/progresión: tónica + notas que recorren la escala, cambian cada ~1.6 s.
+  // Cada paso = una nota fundamental (con armónicos) para ver fundamental + parciales.
+  const ROOT=45; // A2
+  // grados (semitonos sobre ROOT) — recorrido melódico-armónico evocador
+  const STEPS=[
+    0, 7, 12, 7, 3, 10, 15, 10,
+    -2, 5, 12, 17, 14, 7, 5, 2
+  ];
+  const NOTE_MS=1600;
+  // amplitudes relativas de armónicos del timbre (parciales 1..8)
+  const HARM=[1.0,0.55,0.38,0.26,0.18,0.13,0.09,0.06];
+
+  function ensureCtx(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      masterGain=actx.createGain();
+      masterGain.gain.value=0.9;
+      analyser=actx.createAnalyser();
+      analyser.fftSize=4096;
+      analyser.smoothingTimeConstant=0.55;
+      freqData=new Uint8Array(analyser.frequencyBinCount);
+      // master -> analyser -> destino
+      masterGain.connect(analyser);
+      analyser.connect(actx.destination);
+    }
+    if(actx.state==='suspended')actx.resume();
+  }
+
+  // toca una nota como banco de osciladores (fundamental + armónicos)
+  function playNote(semi){
+    const old=voices; voices=[];
+    const t=actx.currentTime;
+    old.forEach(v=>{
+      try{
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(v.g.gain.value,t);
+        v.g.gain.linearRampToValueAtTime(0,t+0.35);
+        v.o.stop(t+0.4);
+      }catch(e){}
+    });
+    const midi=ROOT+semi;
+    const f0=freq(midi);
+    HARM.forEach((amp,h)=>{
+      const partial=h+1;
+      const f=f0*partial;
+      if(f>F_MAX*1.1)return; // ignora parciales fuera de rango útil
+      const o=actx.createOscillator();
+      o.type='sine';
+      o.frequency.value=f;
+      const g=actx.createGain();
+      g.gain.value=0;
+      o.connect(g); g.connect(internalGain);
+      const peak=amp*0.16;
+      o.start(t);
+      g.gain.setValueAtTime(0,t);
+      g.gain.linearRampToValueAtTime(peak,t+0.05);   // ataque corto
+      g.gain.exponentialRampToValueAtTime(Math.max(0.0001,peak*0.5),t+NOTE_MS/1000*0.9); // decay leve
+      voices.push({o,g});
+    });
+  }
+
+  function startInternal(){
+    ensureCtx();
+    internalOn=true;
+    if(!internalGain){
+      internalGain=actx.createGain();
+      internalGain.gain.value=0;
+      internalGain.connect(masterGain);
+    }
+    internalGain.gain.cancelScheduledValues(actx.currentTime);
+    internalGain.gain.setTargetAtTime(1.0,actx.currentTime,0.15);
+    noteIdx=0; noteTimer=performance.now();
+    playNote(STEPS[0]);
+  }
+  function stopInternal(){
+    internalOn=false;
+    if(internalGain)internalGain.gain.setTargetAtTime(0,actx.currentTime,0.2);
+    const old=voices; voices=[];
+    const t=actx?actx.currentTime:0;
+    old.forEach(v=>{try{v.g.gain.linearRampToValueAtTime(0,t+0.3);v.o.stop(t+0.4);}catch(e){}});
+  }
+  function tickNotes(now){
+    if(!internalOn)return;
+    if(now-noteTimer>=NOTE_MS){
+      noteTimer=now;
+      noteIdx=(noteIdx+1)%STEPS.length;
+      playNote(STEPS[noteIdx]);
+    }
+  }
+
+  // ---------- micrófono ----------
+  async function toggleMic(){
+    ensureCtx();
+    const btn=document.getElementById('mic');
+    if(micOn){
+      if(micSource)try{micSource.disconnect();}catch(e){}
+      if(micStream)micStream.getTracks().forEach(tr=>tr.stop());
+      micSource=null;micStream=null;micOn=false;
+      btn.classList.remove('on');btn.textContent='🎤 micrófono';
+      showMsg('micrófono apagado · audio interno');
+      return;
+    }
+    try{
+      micStream=await navigator.mediaDevices.getUserMedia({audio:true});
+      micSource=actx.createMediaStreamSource(micStream);
+      // el mic alimenta SOLO el analizador (no a los altavoces, evita realimentación)
+      micSource.connect(analyser);
+      micOn=true;
+      btn.classList.add('on');btn.textContent='🎤 micrófono ✓';
+      showMsg('micrófono activo — el espectrograma escucha tu sonido');
+    }catch(err){
+      micOn=false;btn.classList.remove('on');btn.textContent='🎤 micrófono';
+      showMsg('no se pudo acceder al micrófono ('+(err&&err.name?err.name:'error')+') · sigue el audio interno');
+    }
+  }
+
+  let msgTimer=null;
+  function showMsg(txt){
+    const m=document.getElementById('msg');
+    m.textContent=txt;m.classList.add('show');
+    clearTimeout(msgTimer);
+    msgTimer=setTimeout(()=>m.classList.remove('show'),3600);
+  }
+
+  // ---------- mapa de color (azul oscuro -> cian -> amarillo -> magenta) ----------
+  // v en [0,1]. Devuelve [r,g,b].
+  function colormap(v){
+    v=Math.max(0,Math.min(1,v));
+    // paradas: 0 negro-azul, .35 cian, .65 amarillo, 1 magenta
+    let r,g,b;
+    if(v<0.35){
+      const t=v/0.35;
+      r=4+t*(10-4); g=6+t*(232-6); b=22+t*(208-22);            // -> cian
+    }else if(v<0.65){
+      const t=(v-0.35)/0.30;
+      r=10+t*(233-10); g=232+t*(255-232); b=208+t*(90-208);    // cian -> amarillo
+    }else{
+      const t=(v-0.65)/0.35;
+      r=233+t*(255-233); g=255+t*(77-255); b=90+t*(157-90);    // amarillo -> magenta
+    }
+    return [r|0,g|0,b|0];
+  }
+
+  // ---------- líneas guía: notas Do (C) por octava ----------
+  // C1=24 ... hasta el rango visible
+  const GUIDE=[];
+  for(let midi=24; midi<=120; midi+=12){
+    const f=freq(midi);
+    if(f>=F_MIN && f<=F_MAX){
+      GUIDE.push({f:f, name:'C'+(Math.floor(midi/12)-1)});
+    }
+  }
+
+  // ---------- controles ----------
+  let gain=1.3, contrast=1.2;
+  const gainEl=document.getElementById('gain'), gainv=document.getElementById('gainv');
+  const contEl=document.getElementById('contrast'), contv=document.getElementById('contrastv');
+  gainEl.oninput=()=>{gain=parseFloat(gainEl.value);gainv.textContent=gain.toFixed(2);};
+  contEl.oninput=()=>{contrast=parseFloat(contEl.value);contv.textContent=contrast.toFixed(2);};
+
+  // precálculo: para cada fila de píxeles (y) qué bin del FFT le corresponde.
+  // Se recalcula cuando cambia H o la sampleRate (al crear el contexto).
+  let rowBin=null, rowH=0, builtRate=0;
+  function buildRowMap(){
+    if(!analyser)return;
+    const rate=actx.sampleRate;
+    const nBins=analyser.frequencyBinCount;     // 2048 con fftSize 4096
+    const nyq=rate/2;
+    rowH=H;
+    builtRate=rate;
+    rowBin=new Int32Array(H);
+    for(let y=0;y<H;y++){
+      // y/H en [0,1] desde arriba. Invertimos: arriba=F_MAX
+      const t=y/(H-1);                          // 0 arriba .. 1 abajo
+      const logf=LOG_MAX-(LOG_MAX-LOG_MIN)*t;    // log2(freq) de esta fila
+      const f=Math.pow(2,logf);
+      let bin=Math.round(f/nyq*nBins);
+      if(bin<0)bin=0; if(bin>=nBins)bin=nBins-1;
+      rowBin[y]=bin;
+    }
+  }
+
+  // columna nueva: ImageData de 1px de ancho, H de alto
+  let col=null;
+  function ensureCol(){
+    if(!col || col.height!==H){ col=ctx.createImageData(1,Math.max(1,H)); }
+  }
+
+  function renderColumn(){
+    if(!analyser||!freqData)return;
+    if(!rowBin || rowH!==H || builtRate!==actx.sampleRate) buildRowMap();
+    ensureCol();
+    const data=col.data;
+    const nBins=analyser.frequencyBinCount;
+    for(let y=0;y<H;y++){
+      const bin=rowBin[y];
+      // pequeño promedio con el bin vecino superior para suavizar verticalmente
+      let m=freqData[bin];
+      if(bin+1<nBins) m=(m+freqData[bin+1])*0.5;
+      let v=(m/255)*gain;
+      // contraste tipo gamma
+      v=Math.pow(Math.max(0,Math.min(1,v)),1/contrast);
+      const c=colormap(v);
+      const o=y*4;
+      data[o]=c[0]; data[o+1]=c[1]; data[o+2]=c[2]; data[o+3]=255;
+    }
+    // desplaza el buffer 1px a la izquierda y pega la columna nueva a la derecha
+    sctx.drawImage(spec, -1, 0);
+    // borra la última columna antes de pintar (evita arrastre)
+    sctx.putImageData(col, spec.width-1, 0);
+  }
+
+  // ---------- nota actual / fundamental detectada (para readout) ----------
+  function currentNoteName(){
+    if(micOn) return 'micrófono';
+    const semi=STEPS[noteIdx];
+    const midi=ROOT+semi;
+    return NOTAS[((midi%12)+12)%12]+(Math.floor(midi/12)-1);
+  }
+
+  // ---------- dibujo principal ----------
+  function draw(now){
+    requestAnimationFrame(draw);
+    tickNotes(now);
+
+    if(analyser){
+      analyser.getByteFrequencyData(freqData);
+      renderColumn();
+    }
+
+    // pinta el buffer del espectrograma a pantalla
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='#04040a';
+    ctx.fillRect(0,0,W,H);
+    if(spec.width>0) ctx.drawImage(spec,0,0,spec.width,spec.height,0,0,W,H);
+
+    // ---- líneas guía de octavas con etiquetas ----
+    ctx.globalCompositeOperation='lighter';
+    ctx.font='600 11px '+getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx.textBaseline='middle';
+    for(let i=0;i<GUIDE.length;i++){
+      const g=GUIDE[i];
+      const y=freqToY01(g.f)*H;
+      ctx.strokeStyle='rgba(123,123,180,0.22)';
+      ctx.lineWidth=1;
+      ctx.beginPath();ctx.moveTo(0,y+0.5);ctx.lineTo(W,y+0.5);ctx.stroke();
+      // etiqueta a la izquierda
+      ctx.fillStyle='rgba(62,232,208,0.85)';
+      ctx.fillText(g.name+'  '+Math.round(g.f)+'Hz', 12, y-8);
+    }
+
+    // borde de "ahora" a la derecha (la columna recién pintada)
+    ctx.globalCompositeOperation='source-over';
+    ctx.strokeStyle='rgba(255,77,157,0.5)';
+    ctx.lineWidth=2;
+    ctx.beginPath();ctx.moveTo(W-1,0);ctx.lineTo(W-1,H);ctx.stroke();
+
+    // readout
+    document.getElementById('readout').innerHTML=
+      'fftSize <b>4096</b> · eje Y log '+F_MIN+'→'+F_MAX+' Hz<br>'+
+      'fuente <b>'+(micOn?'micrófono':'audio interno')+'</b> · nota <b>'+currentNoteName()+'</b><br>'+
+      'ganancia <b>'+gain.toFixed(2)+'</b> · contraste <b>'+contrast.toFixed(2)+'</b>';
+  }
+
+  // ---------- UI ----------
+  const btnSound=document.getElementById('sound');
+  btnSound.onclick=()=>{
+    ensureCtx(); // gesto del usuario: crea/reanuda contexto
+    if(!internalOn){
+      startInternal();
+      btnSound.classList.add('on');btnSound.textContent='⏸ sonando';
+    }else{
+      stopInternal();
+      btnSound.classList.remove('on');btnSound.textContent='▶ sonar';
+    }
+  };
+  document.getElementById('mic').onclick=toggleMic;
+
+  // ---------- arranque ----------
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

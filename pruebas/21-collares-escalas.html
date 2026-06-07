@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>21 · COLLARES DE ESCALAS</title>
+<style>
+:root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+*{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+.back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+.panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+.chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+.grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+select{font:600 12px var(--mono);color:var(--txt);background:#0c0c18;border:1px solid #2a2a44;border-radius:10px;padding:7px 9px;cursor:pointer}
+select:focus{outline:none;border-color:var(--cy)}
+.info{position:fixed;left:18px;bottom:96px;z-index:4;font:600 11px/1.6 var(--mono);color:var(--dim);pointer-events:none;max-width:46vw}
+.info b{color:var(--cy);font-weight:700}
+.info .pat{color:var(--yl)}
+.info .idb{color:var(--pu)}
+@media(max-width:680px){
+.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}
+.panel .grp{flex-wrap:nowrap}
+.info{left:8px;bottom:80px;max-width:90vw;font-size:10px}
+}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">21 · COLLARES DE ESCALAS (IAN RING)</h1>
+  <span class="sub">escala = subconjunto de 12 cuentas en circulo</span>
+</div>
+
+<div class="info" id="info"></div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">escala</span>
+    <select id="selScale"></select>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">tonica</span>
+    <select id="selTonic"></select>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button class="chip" id="btnRot">rotar (modo)</button>
+    <button class="chip" id="btnPlay">tocar escala</button>
+  </div>
+  <div class="sep"></div>
+  <button class="chip" id="btnAudio">activar sonido</button>
+</div>
+
+<script>
+"use strict";
+(function(){
+  // ---- helpers musicales ----
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+  var NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+
+  // ---- definicion de escalas como conjunto de clases de altura desde la tonica ----
+  var SCALES=[
+    {name:"cromatica",       pcs:[0,1,2,3,4,5,6,7,8,9,10,11]},
+    {name:"mayor (jonico)",  pcs:[0,2,4,5,7,9,11]},
+    {name:"dorico",          pcs:[0,2,3,5,7,9,10]},
+    {name:"frigio",          pcs:[0,1,3,5,7,8,10]},
+    {name:"lidio",           pcs:[0,2,4,6,7,9,11]},
+    {name:"mixolidio",       pcs:[0,2,4,5,7,9,10]},
+    {name:"eolio (menor nat)",pcs:[0,2,3,5,7,8,10]},
+    {name:"locrio",          pcs:[0,1,3,5,6,8,10]},
+    {name:"pentatonica may", pcs:[0,2,4,7,9]},
+    {name:"pentatonica men", pcs:[0,3,5,7,10]},
+    {name:"menor armonica",  pcs:[0,2,3,5,7,8,11]},
+    {name:"menor melodica",  pcs:[0,2,3,5,7,9,11]},
+    {name:"tonos enteros",   pcs:[0,2,4,6,8,10]},
+    {name:"disminuida (oct)",pcs:[0,2,3,5,6,8,9,11]},
+    {name:"blues",           pcs:[0,3,5,6,7,10]}
+  ];
+
+  // ---- estado ----
+  var state={
+    scaleIdx:1,            // mayor por defecto
+    tonic:0,               // C
+    set:{},                // conjunto activo: pc absoluto -> true (12 booleans)
+    custom:false           // si el usuario edito a mano
+  };
+  // inicializa set desde escala+tonica
+  function buildSetFromScale(){
+    var s=SCALES[state.scaleIdx];
+    var on={};
+    for(var i=0;i<s.pcs.length;i++){
+      on[(s.pcs[i]+state.tonic)%12]=true;
+    }
+    state.set=on;
+    state.custom=false;
+  }
+  buildSetFromScale();
+
+  // ---- audio ----
+  var ac=null, audioReady=false, master=null;
+  function initAudio(){
+    if(audioReady) return;
+    try{
+      ac=new (window.AudioContext||window.webkitAudioContext)();
+      master=ac.createGain();
+      master.gain.value=0.0001;
+      master.connect(ac.destination);
+      master.gain.setValueAtTime(0.85,ac.currentTime);
+      audioReady=true;
+    }catch(e){ audioReady=false; }
+  }
+  function resumeAudio(){
+    if(ac && ac.state==="suspended"){ ac.resume(); }
+  }
+  // pulso de nota: pc absoluto -> midi 60+pc
+  var ripples=[]; // efecto visual al tocar
+  function playNote(pc, when, dur){
+    if(!audioReady||!ac) return;
+    var midi=60+pc;
+    var t=when;
+    var osc=ac.createOscillator();
+    var g=ac.createGain();
+    osc.type="triangle";
+    osc.frequency.setValueAtTime(freq(midi),t);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.32,t+0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    // armonico tenue
+    var osc2=ac.createOscillator();
+    osc2.type="sine";
+    osc2.frequency.setValueAtTime(freq(midi+12),t);
+    var g2=ac.createGain();
+    g2.gain.setValueAtTime(0.0001,t);
+    g2.gain.exponentialRampToValueAtTime(0.10,t+0.02);
+    g2.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    osc.connect(g); g.connect(master);
+    osc2.connect(g2); g2.connect(master);
+    osc.start(t); osc.stop(t+dur+0.05);
+    osc2.start(t); osc2.stop(t+dur+0.05);
+    // programa ripple visual
+    var delayMs=Math.max(0,(t-ac.currentTime)*1000);
+    setTimeout(function(){ triggerRipple(pc); }, delayMs);
+  }
+  function triggerRipple(pc){
+    ripples.push({pc:pc, t:performance.now()});
+  }
+  // reproduce la escala ascendente: una nota por cuenta presente, ordenada por pc relativo a la tonica
+  function playScale(){
+    if(!audioReady){ return; }
+    resumeAudio();
+    var present=[];
+    for(var i=0;i<12;i++){
+      var pc=(state.tonic+i)%12;
+      if(state.set[pc]) present.push(pc);
+    }
+    // anade octava de la tonica al final si esta presente
+    var step=0.26;
+    var now=ac.currentTime+0.05;
+    for(var k=0;k<present.length;k++){
+      playNote(present[k], now+k*step, 0.42);
+    }
+    // tonica una octava arriba para cerrar
+    if(state.set[state.tonic]){
+      var oct={pc:state.tonic, midi:72+state.tonic};
+      var t=now+present.length*step;
+      // toca octava
+      if(audioReady&&ac){
+        var osc=ac.createOscillator(); var g=ac.createGain();
+        osc.type="triangle"; osc.frequency.setValueAtTime(freq(72+state.tonic),t);
+        g.gain.setValueAtTime(0.0001,t);
+        g.gain.exponentialRampToValueAtTime(0.30,t+0.015);
+        g.gain.exponentialRampToValueAtTime(0.0001,t+0.5);
+        osc.connect(g); g.connect(master);
+        osc.start(t); osc.stop(t+0.55);
+        var dms=Math.max(0,(t-ac.currentTime)*1000);
+        setTimeout(function(){ triggerRipple(state.tonic); }, dms);
+      }
+    }
+  }
+
+  // ---- canvas ----
+  var cv=document.getElementById("c");
+  var ctx=cv.getContext("2d");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(2, window.devicePixelRatio||1);
+    W=window.innerWidth; H=window.innerHeight;
+    cv.width=Math.floor(W*DPR); cv.height=Math.floor(H*DPR);
+    cv.style.width=W+"px"; cv.style.height=H+"px";
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",resize);
+  resize();
+
+  // geometria del collar
+  function beadGeom(){
+    var cx=W/2;
+    var cy=H/2 - 6;
+    var R=Math.min(W,H)*0.30;
+    R=Math.max(70, Math.min(R, 260));
+    return {cx:cx,cy:cy,R:R};
+  }
+  // pc 0 arriba, horario. angulo para pc absoluto
+  function angForPc(pc){
+    return -Math.PI/2 + (pc/12)*Math.PI*2;
+  }
+  function beadPos(pc,g){
+    var a=angForPc(pc);
+    return {x:g.cx+Math.cos(a)*g.R, y:g.cy+Math.sin(a)*g.R, a:a};
+  }
+  function hueForPc(pc){ return pc*30; }
+
+  // ---- interaccion: clic en cuenta ----
+  function pickBead(mx,my){
+    var g=beadGeom();
+    for(var pc=0;pc<12;pc++){
+      var p=beadPos(pc,g);
+      var dx=mx-p.x, dy=my-p.y;
+      var rr=g.R*0.085+10;
+      if(dx*dx+dy*dy <= rr*rr) return pc;
+    }
+    return -1;
+  }
+  cv.addEventListener("pointerdown",function(e){
+    var rect=cv.getBoundingClientRect();
+    var mx=e.clientX-rect.left, my=e.clientY-rect.top;
+    var pc=pickBead(mx,my);
+    if(pc>=0){
+      initAudio(); resumeAudio();
+      if(state.set[pc]){ delete state.set[pc]; }
+      else { state.set[pc]=true; if(audioReady){ playNote(pc, ac.currentTime+0.02, 0.4); } else { triggerRipple(pc);} }
+      state.custom=true;
+      updateInfo();
+    }
+  });
+
+  // ---- UI ----
+  var selScale=document.getElementById("selScale");
+  var selTonic=document.getElementById("selTonic");
+  var btnRot=document.getElementById("btnRot");
+  var btnPlay=document.getElementById("btnPlay");
+  var btnAudio=document.getElementById("btnAudio");
+  var info=document.getElementById("info");
+
+  (function fillSelects(){
+    for(var i=0;i<SCALES.length;i++){
+      var o=document.createElement("option");
+      o.value=String(i); o.textContent=SCALES[i].name;
+      if(i===state.scaleIdx) o.selected=true;
+      selScale.appendChild(o);
+    }
+    for(var t=0;t<12;t++){
+      var ot=document.createElement("option");
+      ot.value=String(t); ot.textContent=NOTAS[t];
+      if(t===state.tonic) ot.selected=true;
+      selTonic.appendChild(ot);
+    }
+  })();
+
+  selScale.addEventListener("change",function(){
+    initAudio(); resumeAudio();
+    state.scaleIdx=parseInt(selScale.value,10);
+    buildSetFromScale();
+    updateInfo();
+    playScale();
+  });
+  selTonic.addEventListener("change",function(){
+    initAudio(); resumeAudio();
+    state.tonic=parseInt(selTonic.value,10);
+    if(state.custom){
+      // si era custom, mantenlo pero re-evaluamos info; la tonica solo mueve referencia
+      updateInfo();
+    } else {
+      buildSetFromScale();
+      updateInfo();
+      playScale();
+    }
+  });
+
+  // rotar (modo): rota el conjunto un grado -> nueva tonica = siguiente nota presente.
+  // muestra que los modos son rotaciones del mismo collar.
+  btnRot.addEventListener("click",function(){
+    initAudio(); resumeAudio();
+    // siguiente clase de altura presente a partir de tonica+1 (horario)
+    var next=-1;
+    for(var i=1;i<=12;i++){
+      var pc=(state.tonic+i)%12;
+      if(state.set[pc]){ next=pc; break; }
+    }
+    if(next>=0){
+      state.tonic=next;
+      selTonic.value=String(state.tonic);
+    }
+    updateInfo();
+    playScale();
+  });
+
+  btnPlay.addEventListener("click",function(){
+    initAudio(); resumeAudio();
+    playScale();
+  });
+
+  btnAudio.addEventListener("click",function(){
+    initAudio(); resumeAudio();
+    btnAudio.classList.add("on");
+    btnAudio.textContent="sonido activo";
+  });
+
+  // ---- panel de info: intervalos + ID Ian Ring ----
+  function intervalPattern(){
+    // pcs presentes relativos a la tonica, ordenados
+    var rel=[];
+    for(var i=0;i<12;i++){
+      var pc=(state.tonic+i)%12;
+      if(state.set[pc]) rel.push(i);
+    }
+    if(rel.length<2) return rel.length===1?"(1 nota)":"(vacio)";
+    var parts=[];
+    for(var k=0;k<rel.length;k++){
+      var a=rel[k];
+      var b=(k+1<rel.length)?rel[k+1]:12; // vuelta a la octava
+      var d=b-a;
+      // T=2 semitonos, s=1, y para >2 mostramos numero
+      if(d===2) parts.push("T");
+      else if(d===1) parts.push("s");
+      else parts.push(d+"");
+    }
+    return parts.join("-");
+  }
+  // ID binario de 12 bits de Ian Ring: suma de 2^pc sobre clases presentes
+  // (Ian Ring usa pc relativos a la tonica como bits; bit0 = tonica)
+  function ianRingId(){
+    var id=0;
+    for(var i=0;i<12;i++){
+      var pc=(state.tonic+i)%12;
+      if(state.set[pc]) id += Math.pow(2,i);
+    }
+    return id;
+  }
+  function notesList(){
+    var out=[];
+    for(var i=0;i<12;i++){
+      var pc=(state.tonic+i)%12;
+      if(state.set[pc]) out.push(NOTAS[pc]);
+    }
+    return out.join(" · ");
+  }
+  function countPresent(){
+    var n=0; for(var i=0;i<12;i++){ if(state.set[i]) n++; } return n;
+  }
+  function updateInfo(){
+    var name = state.custom ? "escala propia" : SCALES[state.scaleIdx].name;
+    var id=ianRingId();
+    var bin=(id).toString(2);
+    while(bin.length<12) bin="0"+bin;
+    info.innerHTML =
+      "<b>"+name+"</b> &nbsp; tonica "+NOTAS[state.tonic]+
+      "<br>notas: "+notesList()+" &nbsp;("+countPresent()+")"+
+      "<br>intervalos: <span class='pat'>"+intervalPattern()+"</span>"+
+      "<br>Ian Ring: <span class='idb'>"+id+" &nbsp; ("+bin+")</span>";
+  }
+  updateInfo();
+
+  // ---- render ----
+  function drawBackground(t){
+    // fondo radial sutil
+    var g=ctx.createRadialGradient(W/2,H*0.42,10, W/2,H*0.42, Math.max(W,H)*0.7);
+    g.addColorStop(0,"#0b0b1c");
+    g.addColorStop(1,"#06060d");
+    ctx.fillStyle=g;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  function draw(now){
+    var t=now*0.001;
+    drawBackground(t);
+    var g=beadGeom();
+    var beadR=g.R*0.085;
+    beadR=Math.max(9, Math.min(beadR, 22));
+
+    // aro guia tenue
+    ctx.save();
+    ctx.strokeStyle="rgba(126,126,160,0.18)";
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.arc(g.cx,g.cy,g.R,0,Math.PI*2);
+    ctx.stroke();
+    ctx.restore();
+
+    // marca tonica (rayo hacia C/tonica)
+    var ptn=beadPos(state.tonic,g);
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.strokeStyle="rgba(62,232,208,0.25)";
+    ctx.lineWidth=2;
+    ctx.beginPath();
+    ctx.moveTo(g.cx,g.cy);
+    ctx.lineTo(ptn.x,ptn.y);
+    ctx.stroke();
+    ctx.restore();
+
+    // poligono del collar (une cuentas presentes en orden horario)
+    var presentPos=[];
+    for(var pc=0;pc<12;pc++){
+      if(state.set[pc]) presentPos.push(beadPos(pc,g));
+    }
+    if(presentPos.length>=2){
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      // halo del poligono
+      ctx.strokeStyle="rgba(155,107,255,0.30)";
+      ctx.lineWidth=8;
+      ctx.lineJoin="round";
+      ctx.beginPath();
+      ctx.moveTo(presentPos[0].x,presentPos[0].y);
+      for(var i=1;i<presentPos.length;i++) ctx.lineTo(presentPos[i].x,presentPos[i].y);
+      ctx.closePath();
+      ctx.stroke();
+      // linea central nitida
+      ctx.strokeStyle="rgba(90,169,255,0.85)";
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.moveTo(presentPos[0].x,presentPos[0].y);
+      for(var j=1;j<presentPos.length;j++) ctx.lineTo(presentPos[j].x,presentPos[j].y);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ripples activos (efecto de pulso al tocar)
+    var nowMs=performance.now();
+    for(var ri=ripples.length-1;ri>=0;ri--){
+      var rp=ripples[ri];
+      var age=(nowMs-rp.t)/650;
+      if(age>=1){ ripples.splice(ri,1); continue; }
+      var rpos=beadPos(rp.pc,g);
+      var hue=hueForPc(rp.pc);
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      ctx.strokeStyle="hsla("+hue+",90%,65%,"+(1-age)*0.7+")";
+      ctx.lineWidth=3*(1-age)+0.5;
+      ctx.beginPath();
+      ctx.arc(rpos.x,rpos.y, beadR + age*beadR*2.6, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // cuentas
+    for(var p=0;p<12;p++){
+      var pos=beadPos(p,g);
+      var on=!!state.set[p];
+      var hue=hueForPc(p);
+      var isTonic=(p===state.tonic);
+      ctx.save();
+      if(on){
+        ctx.globalCompositeOperation="lighter";
+        // glow
+        var glow=ctx.createRadialGradient(pos.x,pos.y,1,pos.x,pos.y,beadR*2.4);
+        glow.addColorStop(0,"hsla("+hue+",95%,65%,0.9)");
+        glow.addColorStop(1,"hsla("+hue+",95%,65%,0)");
+        ctx.fillStyle=glow;
+        ctx.beginPath();
+        ctx.arc(pos.x,pos.y,beadR*2.4,0,Math.PI*2);
+        ctx.fill();
+        // cuenta llena
+        ctx.globalCompositeOperation="source-over";
+        ctx.fillStyle="hsl("+hue+",90%,62%)";
+        ctx.beginPath();
+        ctx.arc(pos.x,pos.y,beadR,0,Math.PI*2);
+        ctx.fill();
+        // borde claro
+        ctx.lineWidth=isTonic?3:1.5;
+        ctx.strokeStyle=isTonic?"#ffffff":"hsla("+hue+",95%,82%,0.9)";
+        ctx.stroke();
+      } else {
+        // aro tenue (ausente)
+        ctx.globalCompositeOperation="source-over";
+        ctx.fillStyle="#0a0a16";
+        ctx.beginPath();
+        ctx.arc(pos.x,pos.y,beadR,0,Math.PI*2);
+        ctx.fill();
+        ctx.lineWidth=isTonic?2.5:1.5;
+        ctx.strokeStyle=isTonic?"rgba(62,232,208,0.7)":"rgba(126,126,160,0.40)";
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // etiqueta de nota
+      ctx.save();
+      ctx.globalCompositeOperation="source-over";
+      var labR=g.R+beadR+16;
+      var la=angForPc(p);
+      var lx=g.cx+Math.cos(la)*labR;
+      var ly=g.cy+Math.sin(la)*labR;
+      ctx.font="600 12px ui-monospace,Menlo,Consolas,monospace";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillStyle= on ? "hsl("+hue+",80%,75%)" : "rgba(126,126,160,0.55)";
+      if(isTonic) ctx.fillStyle="#3ee8d0";
+      ctx.fillText(NOTAS[p], lx, ly);
+      ctx.restore();
+    }
+
+    // centro: marca pequena
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.fillStyle="rgba(233,255,90,0.5)";
+    ctx.beginPath();
+    ctx.arc(g.cx,g.cy,2.5,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    requestAnimationFrame(draw);
+  }
+  requestAnimationFrame(draw);
+
+})();
+</script>
+</body>
+</html>
