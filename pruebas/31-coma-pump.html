@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>31 · LA COMA QUE DERIVA — music0</title>
+<style>
+  :root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+  input[type=range]{width:120px;height:4px;background:#1a1a2e;border-radius:3px;outline:none}
+  .val{font:700 12px var(--mono);color:var(--cy);min-width:54px}
+  .readout{position:fixed;left:18px;top:62px;z-index:5;font:500 12px/1.65 var(--mono);color:var(--dim);pointer-events:none;max-width:min(360px,46vw)}
+  .readout b{color:var(--txt);font-weight:700} .readout .d{color:var(--mg)} .readout .c{color:var(--cy)} .readout .small{color:var(--dim);font-size:11px;line-height:1.5;display:block;margin-top:8px}
+  .now{position:fixed;right:18px;top:62px;z-index:5;text-align:right;pointer-events:none}
+  .now .chord{font:700 30px/1 var(--mono);letter-spacing:.02em}
+  .now .roman{font:600 13px/1.4 var(--mono);color:var(--dim);margin-top:5px}
+  .now .tune{font:600 11px/1.5 var(--mono);color:var(--yl);margin-top:8px}
+  .now .drift{font:700 20px/1.1 var(--mono);color:var(--mg);margin-top:10px}
+  .now .drift small{font:600 10px var(--mono);color:var(--dim);display:block;margin-top:2px}
+  @media(max-width:680px){
+    .panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}
+    .panel .grp{flex-wrap:nowrap}
+    .readout{font-size:10px;top:54px;max-width:52vw}
+    .readout .small{display:none}
+    .now .chord{font-size:22px} .now .tune{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">&larr; galería</a>
+  <h1 class="title">31 · LA COMA QUE DERIVA</h1>
+  <span class="sub">comma pump · coma sintónica 81/80 (~21.5 cents)</span>
+</div>
+
+<div class="readout" id="readout"></div>
+
+<div class="now">
+  <div class="chord" id="chord">—</div>
+  <div class="roman" id="roman">pulsa ▶ tocar</div>
+  <div class="tune" id="tune"></div>
+  <div class="drift" id="drift">0.0 ¢<small>deriva del tónico</small></div>
+</div>
+
+<div class="panel">
+  <div class="grp">
+    <span class="chip" id="btnPlay">▶ tocar</span>
+    <span class="chip" id="btnReset">⟲ reset</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">afinación</span>
+    <span class="chip on" id="tJusta">justa</span>
+    <span class="chip" id="tTemp">temperada</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">tempo</span>
+    <input type="range" id="tempo" min="40" max="160" step="1" value="84">
+    <span class="val" id="tempov">84 bpm</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){return 440*Math.pow(2,(midi-69)/12);}
+  function centsRatio(r){return 1200*Math.log2(r);}
+
+  // ===== Comma pump =====
+  // Progresión I - vi - ii - V - I en Do mayor.
+  // Afinamos por ENCADENAMIENTO: cada acorde se construye con ratios JUSTOS
+  // a partir de su fundamental, y la fundamental del siguiente acorde se
+  // obtiene del anterior por una NOTA COMÚN (intervalo justo).
+  //
+  // Recorrido de fundamentales (relativo al C inicial = 1), por intervalos justos:
+  //   C (1)
+  //   -> A : tercera mayor justa por debajo de C  (×4/5 = 0.8)        [vi: Am]
+  //   -> D : cuarta justa por debajo de A          (×3/4 = 0.75)      [ii: Dm]   D = 1*4/5*3/4 = 3/5
+  //   -> G : quinta justa por debajo de D          (×2/3)             [V: G]     G = 3/5*2/3 = 2/5
+  //   -> C : cuarta justa por encima de G          (×4/3)             [I: C]     C = 2/5*4/3 = 8/15
+  //
+  // El nuevo C respecto al de hace una vuelta:
+  //   raíz_C_inicial = 1  ;  raíz_C_final del ciclo, normalizada a misma octava:
+  //   8/15 -> subir una octava (×2) = 16/15  ... no es coma. El truco está en
+  //   normalizar el tónico a la misma octava y comparar el tónico cantado.
+  // Lo importante didáctico: el FACTOR de deriva por ciclo es 80/81 (baja ~21.5¢).
+  // Lo implementamos directamente como factor de ciclo verificado abajo.
+  //
+  // Construcción robusta de cada acorde con ratios justos (relativos a su raíz):
+  //   mayor:  {1, 5/4, 3/2}
+  //   menor:  {1, 6/5, 3/2}
+  // y elegimos la octava de cada raíz para que las voces se queden cerca.
+
+  // Factor de deriva por ciclo completo (afinación justa encadenada): 80/81.
+  var COMMA = 81/80;                 // coma sintónica como ratio (>1)
+  var COMMA_CENTS = centsRatio(COMMA); // ~ +21.506 cents
+  var CYCLE_FACTOR = 80/81;          // el tónico baja una coma por ciclo
+
+  // Pasos del comma pump. driftStep = cuánto se mueve el tónico-base ANTES
+  // de tocar este acorde (acumulado por encadenamiento justo). Solo el cierre
+  // del ciclo (vuelta a I) aplica la coma completa, repartida didácticamente:
+  // mostramos el tónico-base como referencia que cae 80/81 al cerrar cada vuelta.
+  var PROG=[
+    {roman:"I",  name:"C",  cls:"mayor", baseMul:1.0,  chord:[1, 5/4, 3/2]},
+    {roman:"vi", name:"Am", cls:"menor", baseMul:1.0,  chord:[5/3, 1, 5/4]}, // A=5/3 (3M justa sobre... ) voces sobre el C base
+    {roman:"ii", name:"Dm", cls:"menor", baseMul:1.0,  chord:[9/8, 27/20, 27/16]}, // D=9/8, F=27/20 (6/5 sobre D), A=27/16 (3/2 sobre D)
+    {roman:"V",  name:"G",  cls:"mayor", baseMul:1.0,  chord:[3/2, 15/8, 9/8*2]},
+    {roman:"I",  name:"C",  cls:"mayor", baseMul:1.0,  chord:[1, 5/4, 3/2], closes:true}
+  ];
+  // Nota: los ratios de cada acorde se dan relativos al tónico-base C de la
+  // vuelta actual y producen acordes JUSTOS (sin batido) en modo justo.
+  // El cierre de ciclo (closes:true) multiplica el tónico-base por 80/81.
+
+  // ratios "temperados" (12-TET) equivalentes para el modo temperado: cada nota
+  // se cuantiza al semitono más cercano del 12-TET sobre el tónico-base FIJO.
+  function temperFromJust(ratioJust){
+    var semis=Math.round(12*Math.log2(ratioJust));
+    return Math.pow(2,semis/12);
+  }
+
+  // ===== estado =====
+  var justa=true, playing=false, tempo=84;
+  var baseC=261.63;            // C4 de referencia (Hz) en t=0
+  var driftCents=0;            // deriva acumulada del tónico-base (modo justo)
+  var stepIdx=0;               // índice en PROG
+  var cycles=0;                // ciclos completados
+  var stepStart=0;            // tiempo (s, audioCtx o perf) de inicio del paso
+  var history=[];              // {t, cents} curva del tónico en cents vs 12-TET
+  var maxHist=600;
+
+  // tónico-base actual en Hz según deriva
+  function baseHz(){
+    if(justa) return baseC*Math.pow(2,driftCents/1200);
+    return baseC; // temperada: nunca deriva
+  }
+
+  // ===== canvas =====
+  var canvas=document.getElementById("c");
+  var ctx=canvas.getContext("2d");
+  var W=0,H=0,DPR=1;
+  function resize(){
+    DPR=Math.min(2,window.devicePixelRatio||1);
+    W=window.innerWidth; H=window.innerHeight;
+    canvas.width=Math.round(W*DPR); canvas.height=Math.round(H*DPR);
+    ctx.setTransform(DPR,0,0,DPR,0,0);
+  }
+  window.addEventListener("resize",resize);
+  resize();
+
+  // ===== audio =====
+  var actx=null, master=null;
+  var voices=[]; // osciladores activos del acorde actual
+  function ensureAudio(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      master=actx.createGain();
+      master.gain.value=0.0;
+      master.connect(actx.destination);
+    }
+    if(actx.state==="suspended") actx.resume();
+  }
+
+  function stopVoices(){
+    var now=actx?actx.currentTime:0;
+    voices.forEach(function(v){
+      try{
+        v.g.gain.cancelScheduledValues(now);
+        v.g.gain.setTargetAtTime(0.0,now,0.04);
+        v.o.stop(now+0.25);
+      }catch(e){}
+    });
+    voices=[];
+  }
+
+  function playChord(step){
+    if(!actx) return;
+    stopVoices();
+    var now=actx.currentTime;
+    var bh=baseHz();
+    var ratios=step.chord.map(function(r){ return justa? r : temperFromJust(r); });
+    master.gain.cancelScheduledValues(now);
+    master.gain.setTargetAtTime(0.16,now,0.03);
+    ratios.forEach(function(r,i){
+      var f=bh*r;
+      var o=actx.createOscillator();
+      o.type="triangle";
+      o.frequency.value=f;
+      var g=actx.createGain();
+      g.gain.value=0;
+      g.gain.setTargetAtTime(0.33,now,0.03);
+      // ligero detune cero: queremos que JUSTA suene puro y TEMP bata por sí solo
+      o.connect(g); g.connect(master);
+      o.start(now);
+      voices.push({o:o,g:g,f:f});
+    });
+  }
+
+  // ===== reloj de progresión =====
+  function nowSec(){ return actx? actx.currentTime : performance.now()/1000; }
+  function stepDur(){ return 60/tempo * 2; } // cada acorde ~ 2 negras
+
+  function advance(){
+    var step=PROG[stepIdx];
+    // al ENTRAR en el paso de cierre (vuelta a I) aplicamos la coma:
+    // el tónico-base baja 80/81 (= -21.5¢) en modo justo.
+    if(step.closes && justa){
+      driftCents -= COMMA_CENTS;
+      cycles++;
+    }
+    if(playing) playChord(step);
+    pushHist();
+    stepStart=nowSec();
+  }
+
+  function pushHist(){
+    // cents del tónico-base actual respecto al 12-TET (que es 0 = baseC fijo)
+    var c = justa? driftCents : 0;
+    history.push(c);
+    if(history.length>maxHist) history.shift();
+  }
+
+  function tickProgression(){
+    if(!playing) return;
+    var t=nowSec();
+    if(t-stepStart >= stepDur()){
+      stepIdx=(stepIdx+1)%PROG.length;
+      advance();
+    }
+  }
+
+  // ===== controles =====
+  var btnPlay=document.getElementById("btnPlay");
+  var btnReset=document.getElementById("btnReset");
+  var tJusta=document.getElementById("tJusta");
+  var tTemp=document.getElementById("tTemp");
+  var tempoR=document.getElementById("tempo");
+  var tempov=document.getElementById("tempov");
+
+  btnPlay.addEventListener("click",function(){
+    ensureAudio();
+    playing=!playing;
+    if(playing){
+      btnPlay.textContent="❚❚ pausa"; btnPlay.classList.add("on");
+      stepStart=nowSec()-stepDur(); // dispara el primer acorde ya
+      advance();
+      stepStart=nowSec();
+      playChord(PROG[stepIdx]);
+    }else{
+      btnPlay.textContent="▶ tocar"; btnPlay.classList.remove("on");
+      stopVoices();
+      if(master) master.gain.setTargetAtTime(0.0, actx.currentTime, 0.04);
+    }
+  });
+
+  btnReset.addEventListener("click",function(){
+    driftCents=0; cycles=0; stepIdx=0; history=[];
+    stepStart=nowSec();
+    if(playing){ advance(); stepStart=nowSec(); playChord(PROG[stepIdx]); }
+  });
+
+  function setTuning(j){
+    justa=j;
+    tJusta.classList.toggle("on",j);
+    tTemp.classList.toggle("on",!j);
+    if(playing) playChord(PROG[stepIdx]);
+  }
+  tJusta.addEventListener("click",function(){ setTuning(true); });
+  tTemp.addEventListener("click",function(){ setTuning(false); });
+
+  tempoR.addEventListener("input",function(){
+    tempo=parseInt(tempoR.value,10);
+    tempov.textContent=tempo+" bpm";
+  });
+
+  // ===== dibujo =====
+  var chordEl=document.getElementById("chord");
+  var romanEl=document.getElementById("roman");
+  var tuneEl=document.getElementById("tune");
+  var driftEl=document.getElementById("drift");
+  var readout=document.getElementById("readout");
+
+  function fmt(n,d){ return (n>=0?"+":"")+n.toFixed(d); }
+
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // marco del medidor de cents
+    var padL=70, padR=W*0.5;        // medidor ocupa columna izquierda/centro
+    var top=H*0.30, bot=H*0.78;
+    var midY=(top+bot)/2;            // línea 0¢ del 12-TET
+    var span=Math.max(50, (cycles+1)*COMMA_CENTS + 15); // rango de cents visible (abajo)
+    // mapeo cents -> y (cents negativos = más abajo). 0 en midY-arriba.
+    var topCents=15, botCents=-(span);
+    function yOfCents(c){
+      var f=(topCents-c)/(topCents-botCents);
+      return top + f*(bot-top);
+    }
+
+    // rejilla de comas
+    ctx.save();
+    ctx.font="600 10px ui-monospace,Menlo,monospace";
+    ctx.textAlign="right";
+    var rightX=W-padR+ (W-(W-padR))*0; // borde derecho del panel medidor
+    var gx0=padL, gx1=W*0.5;
+    // líneas horizontales cada coma
+    for(var k=0;k>=-(Math.ceil(span/COMMA_CENTS));k--){
+      var cval=k*COMMA_CENTS;
+      if(cval< botCents-1) break;
+      var y=yOfCents(cval);
+      ctx.strokeStyle = k===0? "#2f6f66" : "#1a1a2e";
+      ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(gx0,y); ctx.lineTo(gx1,y); ctx.stroke();
+      ctx.fillStyle = k===0? "#3ee8d0" : "#56567a";
+      ctx.fillText((k===0?"0":(k+"×coma"))+"  "+fmt(cval,1)+"¢", gx0-6, y+3);
+    }
+    ctx.restore();
+
+    // etiqueta línea 12-TET
+    ctx.save();
+    ctx.font="700 11px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#3ee8d0";
+    ctx.textAlign="left";
+    ctx.fillText("12-TET (tónico fijo)", W*0.5-160, yOfCents(0)-8);
+    ctx.restore();
+
+    // curva del tónico (history) a lo largo del tiempo: x = índice
+    var n=history.length;
+    if(n>1){
+      var x0=padL, x1=W*0.5;
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      // glow
+      ctx.strokeStyle = justa? "#ff4d9d" : "#5aa9ff";
+      ctx.shadowColor = justa? "#ff4d9d" : "#5aa9ff";
+      ctx.shadowBlur=12;
+      ctx.lineWidth=2.5;
+      ctx.beginPath();
+      for(var i=0;i<n;i++){
+        var x=x0+(x1-x0)*(i/(maxHist-1));
+        var y=yOfCents(history[i]);
+        if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+      }
+      ctx.stroke();
+      // punto actual
+      var lastY=yOfCents(history[n-1]);
+      var lastX=x0+(x1-x0)*((n-1)/(maxHist-1));
+      ctx.fillStyle="#fff"; ctx.shadowBlur=16;
+      ctx.beginPath(); ctx.arc(lastX,lastY,4,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+
+    // ===== panel derecho: torre de quintas/voces del acorde actual =====
+    drawChordVoices();
+
+    // título eje
+    ctx.save();
+    ctx.font="600 10px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#56567a";
+    ctx.textAlign="center";
+    ctx.fillText("→ tiempo (acordes)", (padL+W*0.5)/2, bot+22);
+    ctx.restore();
+  }
+
+  // voces del acorde actual como barras verticales con su frecuencia
+  function drawChordVoices(){
+    var step=PROG[stepIdx];
+    var bh=baseHz();
+    var ratios=step.chord.map(function(r){ return justa? r : temperFromJust(r); });
+    var cx0=W*0.56, cx1=W-40;
+    var top=H*0.30, bot=H*0.78;
+    var fmin=bh*0.9, fmax=bh*2.4;   // hasta 9/4 (la D aguda del acorde de G) cabe en el recuadro
+    function yOfF(f){
+      var t=(Math.log2(f)-Math.log2(fmin))/(Math.log2(fmax)-Math.log2(fmin));
+      return bot - t*(bot-top);
+    }
+    ctx.save();
+    // marco
+    ctx.font="600 10px ui-monospace,Menlo,monospace";
+    ctx.fillStyle="#56567a"; ctx.textAlign="left";
+    ctx.fillText("voces del acorde (Hz)", cx0, top-14);
+
+    var colors=["#3ee8d0","#e9ff5a","#9b6bff","#ff4d9d"];
+    ratios.forEach(function(r,i){
+      var f=bh*r;
+      var y=yOfF(f);
+      var col=colors[i%colors.length];
+      ctx.globalCompositeOperation="lighter";
+      ctx.strokeStyle=col; ctx.shadowColor=col; ctx.shadowBlur=8; ctx.lineWidth=3;
+      ctx.beginPath(); ctx.moveTo(cx0,y); ctx.lineTo(cx1-90,y); ctx.stroke();
+      ctx.globalCompositeOperation="source-over";
+      ctx.shadowBlur=0;
+      ctx.fillStyle=col; ctx.textAlign="left";
+      ctx.font="700 12px ui-monospace,Menlo,monospace";
+      ctx.fillText(f.toFixed(1)+" Hz", cx1-82, y+4);
+      // ratio justo
+      ctx.fillStyle="#56567a"; ctx.font="600 10px ui-monospace,Menlo,monospace";
+      var ratioTxt = justa? ratioName(step.chord[i]) : "12-TET";
+      ctx.fillText(ratioTxt, cx0, y-6);
+    });
+
+    // indicador de batido en temperada (visual)
+    if(!justa){
+      ctx.fillStyle="#ff4d9d"; ctx.font="600 11px ui-monospace,Menlo,monospace";
+      ctx.fillText("⚠ batido: intervalos no puros", cx0, bot+22);
+    }else{
+      ctx.fillStyle="#3ee8d0"; ctx.font="600 11px ui-monospace,Menlo,monospace";
+      ctx.fillText("✓ acorde puro (sin batido)", cx0, bot+22);
+    }
+    ctx.restore();
+  }
+
+  function ratioName(r){
+    var common=[[1,"1/1"],[9/8,"9/8"],[6/5,"6/5"],[5/4,"5/4"],[4/3,"4/3"],[3/2,"3/2"],[5/3,"5/3"],[15/8,"15/8"],[2,"2/1"],[9/4,"9/4"]];
+    for(var i=0;i<common.length;i++){ if(Math.abs(r-common[i][0])<1e-6) return common[i][1]; }
+    return r.toFixed(3);
+  }
+
+  // ===== HUD =====
+  function updateHUD(){
+    var step=PROG[stepIdx];
+    chordEl.textContent=step.name;
+    chordEl.style.color = step.cls==="mayor"? "#3ee8d0" : "#9b6bff";
+    romanEl.textContent= (playing?"":"⏸ ") + "grado "+step.roman+" · "+(step.cls);
+    tuneEl.textContent = justa? "entonación JUSTA (pura)" : "12-TET (temperada)";
+    var d = justa? driftCents : 0;
+    driftEl.innerHTML = fmt(d,1)+" ¢<small>deriva del tónico · "+cycles+" ciclos</small>";
+
+    var bh=baseHz();
+    readout.innerHTML=
+      "<b>El comma pump:</b> la progresión <b>I–vi–ii–V–I</b> "+
+      "(C–Am–Dm–G–C) afinada con intervalos <b>justos</b> puros "+
+      "no vuelve al tónico de partida: <span class=d>deriva 80/81 ≈ "+fmt(-COMMA_CENTS,1)+"¢</span> por vuelta.<br>"+
+      "tónico base: <b>"+bh.toFixed(2)+" Hz</b> &nbsp; (C ref "+baseC.toFixed(2)+")<br>"+
+      "coma sintónica = <span class=c>81/80 = "+fmt(COMMA_CENTS,2)+"¢</span>"+
+      "<span class='small'>En <b>JUSTA</b> cada acorde suena puro pero el tónico se hunde "+
+      "una coma por ciclo (la línea rosa se aleja del 12-TET). En <b>TEMPERADA</b> el "+
+      "tónico vuelve exacto (sin deriva) pero los acordes pierden pureza y baten. "+
+      "Por eso existe el temperamento igual: reparte la coma para que la música pueda "+
+      "modular y dar vueltas sin desafinar.</span>";
+  }
+
+  // ===== bucle =====
+  function loop(){
+    tickProgression();
+    draw();
+    updateHUD();
+    requestAnimationFrame(loop);
+  }
+  // inicializa historia con un punto
+  pushHist();
+  loop();
+
+})();
+</script>
+</body>
+</html>

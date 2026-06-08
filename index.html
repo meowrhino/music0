@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>music0 · visualizaciones de la armonía</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23090912'/><circle cx='16' cy='16' r='9' fill='none' stroke='%233ee8d0' stroke-width='2.6'/><circle cx='16' cy='16' r='3' fill='%23ff4d9d'/></svg>">
-<meta name="description" content="26 juguetes interactivos para ver y oír la teoría musical — Canvas + Web Audio, sin dependencias — y un ensayo explorable.">
+<meta name="description" content="31 juguetes interactivos para ver y oír la teoría musical — Canvas + Web Audio, sin dependencias — y un ensayo explorable.">
 <meta name="theme-color" content="#06060d">
 <meta property="og:type" content="website">
 <meta property="og:title" content="music0 · ver la armonía">
-<meta property="og:description" content="26 visualizaciones interactivas de la armonía musical, en Canvas + Web Audio, sin dependencias. Y un ensayo explorable.">
+<meta property="og:description" content="31 visualizaciones interactivas de la armonía musical, en Canvas + Web Audio, sin dependencias. Y un ensayo explorable.">
 <meta property="og:url" content="https://meowrhino.github.io/music0/">
 <meta property="og:image" content="https://meowrhino.github.io/music0/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="music0 · ver la armonía">
-<meta name="twitter:description" content="26 visualizaciones interactivas de la armonía musical. Canvas + Web Audio, 0 dependencias.">
+<meta name="twitter:description" content="31 visualizaciones interactivas de la armonía musical. Canvas + Web Audio, 0 dependencias.">
 <meta name="twitter:image" content="https://meowrhino.github.io/music0/og.png">
 <style>
   :root{
@@ -139,7 +139,7 @@
       <h2>Explóralo en 30 segundos</h2>
       <a class="ex-more" href="ensayo.html">ver el ensayo completo →</a>
     </div>
-    <p class="ex-lede">Cuatro ideas, en vivo. Toca dentro de cada recuadro… y luego baja a la galería de las 26.</p>
+    <p class="ex-lede">Cuatro ideas, en vivo. Toca dentro de cada recuadro… y luego baja a la galería de las 31.</p>
     <div class="teasers">
       <figure class="teaser">
         <div class="tframe"><div class="tph">cargando…</div><iframe data-src="pruebas/01-lissajous.html" title="Lissajous" loading="lazy"></iframe></div>
@@ -170,7 +170,7 @@
       <a href="pruebas/13-instrumento.html" style="color:var(--cy)">instrumento en vivo</a> (D) y esta
       portada que lo funde todo (E). Los créditos y el cómo está hecho, en <a href="sobre.html" style="color:var(--cy)">sobre</a>.</p>
     <div class="rumbos">
-      <div class="rumbo now"><h3>A · galería ✦</h3><p>El navegador de las 26 piezas.</p></div>
+      <div class="rumbo now"><h3>A · galería ✦</h3><p>El navegador de las 31 piezas.</p></div>
       <div class="rumbo now"><h3>B · showpiece ✦</h3><p>Tonnetz 3D, orbifolds de díadas, tríadas y tétradas.</p></div>
       <div class="rumbo now"><h3>C · ensayo ✦</h3><p><a href="ensayo.html" style="color:var(--cy)">Paseo narrativo</a> con widgets.</p></div>
       <div class="rumbo now"><h3>D · instrumento ✦</h3><p>Tocas y todo reacciona a la vez.</p></div>
@@ -271,6 +271,21 @@
     '26':{ac:'#3ee8d0',ttl:'Chladni 3D',cat:'cat. 3',vi:9,cd:7,
       d:'La placa de Chladni como relieve 3D; las líneas nodales (en cian) sobre el modo (n, m). Complementa la versión 2D.',
       tags:['Canvas','Web Audio','3D'],href:'pruebas/26-chladni-3d.html'},
+    '27':{ac:'#9b6bff',ttl:'Secuenciador del Tonnetz',cat:'cat. 4',vi:9,cd:8,
+      d:'Teje una progresión de acordes sobre el Tonnetz y míralo recorrer la retícula en bucle. Tempo, pasos, play.',
+      tags:['Canvas','Web Audio'],href:'pruebas/27-secuenciador-tonnetz.html'},
+    '28':{ac:'#3ee8d0',ttl:'Música infinita',cat:'cat. 4',vi:8,cd:6,
+      d:'Armonía generativa sin fin (modo Eno): un paseo aleatorio de transformaciones PLR que nunca se repite. Déjalo sonar.',
+      tags:['Canvas','Web Audio'],href:'pruebas/28-musica-infinita.html'},
+    '29':{ac:'#e9ff5a',ttl:'Teclado isomórfico',cat:'cat. 1',vi:8,cd:8,
+      d:'Disposición Wicki–Hayden en hexágonos: la misma forma de acorde o escala sirve en cualquier tonalidad. Tócalo.',
+      tags:['Canvas','Web Audio'],href:'pruebas/29-teclado-isomorfico.html'},
+    '30':{ac:'#ff4d9d',ttl:'Espiral de overtonos',cat:'cat. 2',vi:9,cd:8,
+      d:'La espiral de la altura: una vuelta = una octava, así las octavas se alinean en el mismo radio. La serie armónica enrollada.',
+      tags:['Canvas','Web Audio'],href:'pruebas/30-espiral-overtonos.html'},
+    '31':{ac:'#5aa9ff',ttl:'La coma que deriva',cat:'cat. 2',vi:8,cd:10,
+      d:'El "comma pump": una progresión en entonación justa cuyo tónico deriva una coma sintónica por vuelta. Por eso existe el temperamento igual.',
+      tags:['Canvas','Web Audio'],href:'pruebas/31-coma-pump.html'},
   };
   const SECTIONS=[
     {idx:'★', t:'Instrumento en vivo',
@@ -278,10 +293,10 @@
       keys:['13']},
     {idx:'I', t:'Geometría de acordes y tríadas',
       b:'Las notas como puntos; los acordes como formas. Polígonos, triángulos, la retícula envuelta en un toro… y los acordes como puntos en un orbifold.',
-      keys:['02','03','11','12','14','15','21','22']},
+      keys:['02','03','11','12','14','15','21','22','27','28','29']},
     {idx:'II', t:'Frecuencia, ratios y afinación',
       b:'La música como números: cocientes simples, sobretonos, entonación justa frente al temperamento igual, e ilusiones de altura.',
-      keys:['01','04','10','09','16','23','24','25']},
+      keys:['01','04','10','09','16','23','24','25','30','31']},
     {idx:'III', t:'Física y espectro',
       b:'El sonido hecho materia y luz: placas vibrantes y el espectro en tiempo real.',
       keys:['05','08','18','19','26']},

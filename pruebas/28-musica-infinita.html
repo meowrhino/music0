@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>28 · Música infinita — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:30px;background:#23233e}
+  .slid{display:flex;flex-direction:column;gap:4px;min-width:150px}
+  .slid label{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.08em;
+    display:flex;justify-content:space-between}
+  .slid label b{color:var(--yl)}
+  input[type=range]{width:100%;accent-color:var(--mg)}
+  .read{position:fixed;left:0;right:0;top:50%;z-index:4;text-align:center;pointer-events:none;
+    transform:translateY(-50%)}
+  .read .name{font:300 clamp(40px,9vw,96px)/1 var(--sans);letter-spacing:.02em;
+    transition:opacity .9s, color .9s; text-shadow:0 0 30px currentColor}
+  .read .move{font:600 11px/1.6 var(--mono);color:var(--dim);text-transform:uppercase;
+    letter-spacing:.18em;margin-top:18px;transition:opacity .9s}
+  .hint{position:fixed;right:18px;top:54px;z-index:5;font:500 11px/1.7 var(--mono);color:var(--dim);
+    text-align:right;max-width:300px}
+  @media(max-width:680px){.hint{display:none}}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel .slid{min-width:140px}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">28 · MÚSICA INFINITA</h1>
+  <span class="sub">armonía generativa sin fin · transformaciones neo-riemannianas (P/L/R)</span>
+</div>
+<div class="read">
+  <div class="name" id="name">—</div>
+  <div class="move" id="move">pulsa tocar para empezar</div>
+</div>
+<div class="hint">Cada acorde se transforma en el siguiente compartiendo 2 de sus 3 notas:<br>
+  <b style="color:var(--cy)">P</b> paralela (cambia la tercera) · <b style="color:var(--mg)">L</b> intercambio de sensible · <b style="color:var(--yl)">R</b> relativa.<br>
+  El camino es siempre consonante y nunca se repite igual. Déjalo sonar de fondo.</div>
+<div class="panel">
+  <span class="chip" id="play">▶ tocar</span>
+  <div class="sep"></div>
+  <div class="slid"><label>ritmo / densidad <b id="rateLab">cada 6.0 s</b></label>
+    <input type="range" id="rate" min="2.5" max="12" value="6" step="0.5"></div>
+  <div class="sep"></div>
+  <span class="chip" id="seed">✦ semilla nueva</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+  const MONO="ui-monospace,Menlo,monospace";
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // ---------------- estado de armonía ----------------
+  // un acorde = {root: pc 0-11, min: bool}  (tríada mayor o menor)
+  // representamos por notas midi reales para mantener registro / conducción de voces suave
+  let chord = makeTriad(0,false);            // C mayor
+  let chordMidi = voiceTriad(chord, 60);     // 3 midis reales
+  let chordCol = chordColor(chord);
+
+  function makeTriad(root,min){ return {root:((root%12)+12)%12, min:!!min}; }
+
+  // clases de altura de la tríada (root, tercera, quinta)
+  function pcs(ch){
+    const third = ch.min?3:4;
+    return [ch.root, (ch.root+third)%12, (ch.root+7)%12];
+  }
+
+  // coloca la tríada en midis reales cerca de un centro deseado (registro medio)
+  function voiceTriad(ch, center){
+    const p=pcs(ch);
+    // raiz alrededor de 'center', tercera y quinta apiladas por encima
+    let r = nearestMidi(p[0], center);
+    let t = r + ((p[1]-p[0]+12)%12);
+    let f = r + ((p[2]-p[0]+12)%12);
+    return [r,t,f];
+  }
+  function nearestMidi(pc, target){
+    let m = Math.round(target);
+    let mPc = ((m%12)+12)%12;
+    let d = ((pc-mPc+18)%12)-6;   // -6..+5
+    return m+d;
+  }
+
+  // ---- transformaciones neo-riemannianas P / L / R (conservan 2 notas) ----
+  function transform(ch, op){
+    const r=ch.root, m=ch.min;
+    if(op==='P'){ return makeTriad(r, !m); }                 // mayor<->menor (misma raíz)
+    if(op==='L'){                                            // Leittonwechsel
+      return m ? makeTriad((r-4+12)%12, false)               // menor -> mayor a -4 (sube la quinta; distinto de R)
+               : makeTriad((r+4)%12, true);                  // mayor -> menor a +4
+    }
+    // R relativa: mayor -> su relativo menor (raíz -3) ; menor -> su relativo mayor (raíz +3)
+    return m ? makeTriad((r+3)%12, false)                    // menor -> mayor relativo (+3)
+             : makeTriad((r-3+12)%12, true);                 // mayor -> menor relativo (-3)
+  }
+
+  // elige siguiente operación con pesos suaves; evita deshacer la anterior inmediatamente
+  let lastOp=null;
+  const OPS=['P','L','R'];
+  // pesos: R algo más probable (movimiento más "narrativo"), P y L cierran
+  const WOP={P:0.9, L:1.0, R:1.25};
+  function nextOp(){
+    let pool=[];
+    for(const o of OPS){
+      let w=WOP[o];
+      if(o===lastOp) w*=0.45;          // no repetir la misma seguidas con tanta frecuencia
+      for(let i=0;i<Math.round(w*20);i++) pool.push(o);
+    }
+    return pool[Math.floor(Math.random()*pool.length)];
+  }
+
+  function chordName(ch){ return NOTAS[ch.root]+(ch.min?'m':''); }
+
+  // color por clase de altura de la raíz (rueda de croma)
+  function chordColor(ch){
+    const hue=(ch.root/12)*360;
+    const sat=ch.min?60:78, lig=ch.min?56:62;
+    return 'hsl('+(hue|0)+' '+sat+'% '+lig+'%)';
+  }
+  function hslParts(ch){
+    return {h:(ch.root/12)*360, s:ch.min?60:78, l:ch.min?56:62};
+  }
+
+  // ---------------- AUDIO ----------------
+  let actx=null, master=null, lp=null, delay=null, fb=null, wet=null, playing=false;
+  let voices=[];           // osciladores activos del acorde actual
+  let stepTimer=null;
+  let rateSec=6;
+
+  function ctxOn(){
+    if(!actx){
+      actx=new(window.AudioContext||window.webkitAudioContext)();
+      // cadena maestra: voces -> lowpass -> master -> destino
+      master=actx.createGain(); master.gain.value=0.0;
+      lp=actx.createBiquadFilter(); lp.type='lowpass';
+      lp.frequency.value=1100; lp.Q.value=0.4;
+      // delay sencillo con feedback bajo para profundidad
+      delay=actx.createDelay(2.0); delay.delayTime.value=0.55;
+      fb=actx.createGain(); fb.gain.value=0.32;
+      wet=actx.createGain(); wet.gain.value=0.28;
+      lp.connect(master);
+      master.connect(actx.destination);
+      // envío al delay
+      master.connect(delay); delay.connect(fb); fb.connect(delay);
+      delay.connect(wet); wet.connect(actx.destination);
+    }
+    if(actx.state==='suspended') actx.resume();
+    return actx;
+  }
+
+  // crea un pad para un acorde dado: por cada nota, 2 osciladores desafinados
+  function makePad(midis){
+    const a=actx, t=a.currentTime;
+    const grp={ oscs:[], gain:a.createGain() };
+    grp.gain.gain.setValueAtTime(0.0001,t);
+    grp.gain.connect(lp);
+    const peak=0.16/Math.max(1,midis.length); // ganancia baja, repartida
+    const ATT=Math.min(rateSec*0.55, 4.2);    // ataque largo
+    grp.gain.gain.exponentialRampToValueAtTime(peak, t+ATT);
+    grp.peak=peak;
+    midis.forEach((mi,idx)=>{
+      const f=freq(mi);
+      [-1,1].forEach((s,j)=>{
+        const o=a.createOscillator();
+        o.type = (idx%2===0)?'triangle':'sine';
+        o.frequency.value=f;
+        o.detune.value = s*(4+idx*1.5);       // ligero desafine entre los dos osciladores
+        // pequeño vibrato lentísimo via desplazamiento de detune
+        const og=a.createGain(); og.gain.value=(j===0?0.62:0.5);
+        o.connect(og); og.connect(grp.gain);
+        o.start(t);
+        grp.oscs.push(o);
+      });
+    });
+    return grp;
+  }
+
+  // crossfade: sube el nuevo pad y baja/cierra el anterior con release largo
+  function crossfadeTo(midis){
+    const a=actx, t=a.currentTime;
+    const REL=Math.min(rateSec*0.9, 6.5);     // release largo y solapado
+    // libera voces antiguas
+    voices.forEach(v=>{
+      try{
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setValueAtTime(Math.max(v.gain.gain.value,0.0001),t);
+        v.gain.gain.exponentialRampToValueAtTime(0.0001, t+REL);
+        v.oscs.forEach(o=>{ try{o.stop(t+REL+0.1);}catch(e){} });
+      }catch(e){}
+    });
+    voices = [ makePad(midis) ];
+  }
+
+  // ---------------- paso generativo ----------------
+  function advance(){
+    const op=nextOp();
+    lastOp=op;
+    const next=transform(chord, op);
+    // conducción de voces suave: re-voicea cerca del registro anterior
+    const centerPrev = chordMidi.reduce((a,b)=>a+b,0)/chordMidi.length;
+    let nm = voiceTriad(next, centerPrev);
+    // mantén el centro flotando en una banda agradable (evita deriva al infinito)
+    const c = nm.reduce((a,b)=>a+b,0)/nm.length;
+    if(c<54) nm=nm.map(x=>x+12);
+    else if(c>69) nm=nm.map(x=>x-12);
+
+    chord=next; chordMidi=nm; chordCol=chordColor(chord);
+    lastMove=op;
+    moveFlash=1;
+    spawnBloom();
+    showName();
+    if(playing) crossfadeTo(chordMidi);
+    scheduleNext();
+  }
+
+  function scheduleNext(){
+    clearTimeout(stepTimer);
+    // algo de aleatoriedad alrededor del ritmo elegido
+    const jitter = 1 + (Math.random()*0.4-0.2);
+    stepTimer=setTimeout(advance, rateSec*1000*jitter);
+  }
+
+  // ---------------- transporte ----------------
+  function start(){
+    ctxOn();
+    playing=true;
+    document.getElementById('play').classList.add('on');
+    document.getElementById('play').textContent='⏸ pausa';
+    crossfadeTo(chordMidi);
+    showName();
+    scheduleNext();
+  }
+  function stop(){
+    playing=false;
+    document.getElementById('play').classList.remove('on');
+    document.getElementById('play').textContent='▶ tocar';
+    clearTimeout(stepTimer);
+    if(actx){
+      const t=actx.currentTime, REL=3.5;
+      voices.forEach(v=>{ try{
+        v.gain.gain.cancelScheduledValues(t);
+        v.gain.gain.setValueAtTime(Math.max(v.gain.gain.value,0.0001),t);
+        v.gain.gain.exponentialRampToValueAtTime(0.0001,t+REL);
+        v.oscs.forEach(o=>{ try{o.stop(t+REL+0.1);}catch(e){} });
+      }catch(e){} });
+      voices=[];
+    }
+  }
+
+  function newSeed(){
+    chord = makeTriad(Math.floor(Math.random()*12), Math.random()<0.5);
+    chordMidi = voiceTriad(chord, 60);
+    chordCol = chordColor(chord);
+    lastOp=null; lastMove=null; moveFlash=1;
+    blooms=[];
+    spawnBloom();
+    showName();
+    if(playing){ crossfadeTo(chordMidi); scheduleNext(); }
+  }
+
+  // ---------------- VISUAL ----------------
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,cx,cy,radius;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2; radius=Math.min(W,H)*0.34;
+  }
+  addEventListener('resize',resize);
+
+  // posición en el círculo de croma para una clase de altura
+  function pcPos(pc, r){
+    const ang=-Math.PI/2 + (pc/12)*Math.PI*2;
+    return { x:cx+Math.cos(ang)*r, y:cy+Math.sin(ang)*r, ang };
+  }
+
+  // blooms: floraciones suaves en las clases del acorde
+  let blooms=[];
+  function spawnBloom(){
+    const ps=pcs(chord);
+    const parts=hslParts(chord);
+    ps.forEach((pc,i)=>{
+      blooms.push({
+        pc, born:performance.now(),
+        life:rateSec*1700,             // vive un poco más que el acorde para solapar
+        hue:(pc/12)*360,
+        seed:Math.random()*1000,
+        big:i===0
+      });
+    });
+    if(blooms.length>60) blooms.splice(0,blooms.length-60);
+  }
+
+  let lastMove=null, moveFlash=0, namePhase=0;
+  function showName(){
+    const el=document.getElementById('name'), mv=document.getElementById('move');
+    el.style.opacity=0;
+    setTimeout(()=>{
+      el.textContent=chordName(chord);
+      el.style.color=chordCol;
+      el.style.opacity=0.95;
+    },140);
+    const lab={P:'P · paralela', L:'L · sensible', R:'R · relativa'};
+    mv.textContent = lastMove ? ('→ '+lab[lastMove]) : 'semilla';
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    const t=now||performance.now();
+
+    // rastro: rellena con negro semitransparente en vez de clear (deja estela)
+    ctx.globalCompositeOperation='source-over';
+    ctx.fillStyle='rgba(6,6,13,0.085)';
+    ctx.fillRect(0,0,W,H);
+
+    // círculo de croma de fondo (muy tenue)
+    ctx.save();
+    ctx.strokeStyle='rgba(40,40,72,0.5)';
+    ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(cx,cy,radius,0,Math.PI*2); ctx.stroke();
+    ctx.font='600 10px '+MONO; ctx.textAlign='center'; ctx.textBaseline='middle';
+    for(let i=0;i<12;i++){
+      const p=pcPos(i,radius+18);
+      ctx.fillStyle='#34345a';
+      ctx.fillText(NOTAS[i],p.x,p.y);
+    }
+    ctx.restore();
+
+    // blooms con globalCompositeOperation lighter
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    for(let k=blooms.length-1;k>=0;k--){
+      const b=blooms[k];
+      const age=(t-b.born)/b.life;
+      if(age>=1){ blooms.splice(k,1); continue; }
+      // envolvente: sube y baja suave (sin pico brusco)
+      const env=Math.sin(Math.min(1,age)*Math.PI);
+      const pos=pcPos(b.pc, radius);
+      const breathe=0.5+0.5*Math.sin(t*0.0006 + b.seed);
+      const baseR=(b.big?radius*0.42:radius*0.30)*(0.7+0.3*breathe);
+      const R=baseR*env;
+      if(R<1) continue;
+      const col='hsla('+(b.hue|0)+',82%,62%,';
+      const g=ctx.createRadialGradient(pos.x,pos.y,0,pos.x,pos.y,R);
+      g.addColorStop(0,   col+(0.42*env).toFixed(3)+')');
+      g.addColorStop(0.35,col+(0.18*env).toFixed(3)+')');
+      g.addColorStop(1,   col+'0)');
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(pos.x,pos.y,R,0,Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+
+    // tríada actual: nodos brillantes + arcos que conectan las 3 notas
+    const ps=pcs(chord);
+    const P=ps.map(pc=>pcPos(pc,radius));
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    // triángulo de unión
+    ctx.strokeStyle=chordCol;
+    ctx.globalAlpha=0.5;
+    ctx.lineWidth=1.4;
+    ctx.beginPath();
+    P.forEach((p,i)=> i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));
+    ctx.closePath(); ctx.stroke();
+    ctx.globalAlpha=1;
+    // nodos
+    const pulse=playing?(0.8+0.2*Math.sin(t*0.003)):0.8;
+    P.forEach((p,i)=>{
+      ctx.shadowColor=chordCol; ctx.shadowBlur=22;
+      ctx.fillStyle=chordCol;
+      ctx.beginPath(); ctx.arc(p.x,p.y,(i===0?9:6.5)*pulse,0,Math.PI*2); ctx.fill();
+    });
+    ctx.shadowBlur=0;
+    ctx.restore();
+
+    // destello del cambio (anillo expansivo)
+    if(moveFlash>0){
+      moveFlash-=0.012;
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      const rr=radius*(0.2+(1-moveFlash)*0.9);
+      ctx.strokeStyle=chordCol;
+      ctx.globalAlpha=Math.max(0,moveFlash)*0.5;
+      ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // ---------------- UI ----------------
+  document.getElementById('play').onclick=()=>{ playing?stop():start(); };
+  document.getElementById('seed').onclick=newSeed;
+  const rate=document.getElementById('rate'), rateLab=document.getElementById('rateLab');
+  rate.addEventListener('input',e=>{
+    rateSec=+e.target.value;
+    rateLab.textContent='cada '+rateSec.toFixed(1)+' s';
+    // reprograma el próximo cambio con el nuevo ritmo si está sonando
+    if(playing) scheduleNext();
+  });
+
+  // estado inicial visible (sin audio hasta gesto)
+  resize();
+  document.getElementById('name').textContent=chordName(chord);
+  document.getElementById('name').style.color=chordCol;
+  document.getElementById('name').style.opacity=0.95;
+  spawnBloom();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

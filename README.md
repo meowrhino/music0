@@ -1,7 +1,7 @@
 # music0 · visualizaciones de la armonía musical
 
 [![en vivo](https://img.shields.io/badge/en%20vivo-meowrhino.github.io%2Fmusic0-3ee8d0?style=flat-square)](https://meowrhino.github.io/music0/)
-![piezas](https://img.shields.io/badge/piezas-26-9b6bff?style=flat-square)
+![piezas](https://img.shields.io/badge/piezas-31-9b6bff?style=flat-square)
 ![dependencias](https://img.shields.io/badge/dependencias-0-ff4d9d?style=flat-square)
 ![stack](https://img.shields.io/badge/Canvas%20%2B%20Web%20Audio-vanilla-e9ff5a?style=flat-square)
 
@@ -9,7 +9,7 @@
 
 [![music0](og.png)](https://meowrhino.github.io/music0/)
 
-**26 juguetes interactivos** para **ver y oír** la teoría musical, a partir de la
+**31 juguetes interactivos** para **ver y oír** la teoría musical, a partir de la
 [investigación](investigacion.md) de partida. Todo es **HTML + Canvas + Web Audio API** puro:
 sin build, sin dependencias, sin red. Cada pieza es un `.html` autónomo que funciona abriéndolo
 directamente. Hay además un **[ensayo explorable](ensayo.html)** y una página **[sobre](sobre.html)**.
@@ -29,7 +29,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (26 piezas, agrupadas por categoría)
+## Las pruebas (31 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -52,6 +52,9 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 15 | [Orbifold de tríadas](pruebas/15-orbifold-triadas.html) | El triángulo de tipos de tríada (sección del prisma): aumentada al centro, unísonos en los vértices. | 4 | 8/10 |
 | 21 | [Collares de escalas](pruebas/21-collares-escalas.html) | Escalas como collares de 12 cuentas (Ian Ring); modos = rotaciones, patrón de intervalos + ID binario. | 1 | 7/9 |
 | 22 | [Orbifold de tétradas](pruebas/22-orbifold-tetradas.html) | El espacio de acordes de 4 notas: tetraedro 3D, séptima disminuida en el centro. | 4 | 8/10 |
+| 27 | [Secuenciador del Tonnetz](pruebas/27-secuenciador-tonnetz.html) | Teje una progresión sobre el Tonnetz y míralo recorrer la retícula en bucle. | 4 | 9/8 |
+| 28 | [Música infinita](pruebas/28-musica-infinita.html) | Armonía generativa sin fin (paseo PLR aleatorio, modo Eno). Déjalo sonar. | 4 | 8/6 |
+| 29 | [Teclado isomórfico](pruebas/29-teclado-isomorfico.html) | Wicki–Hayden en hexágonos: la misma forma de acorde sirve en cualquier tono. | 1 | 8/8 |
 
 **II · Frecuencia, ratios y afinación**
 
@@ -65,6 +68,8 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 23 | [Hélice de croma](pruebas/23-helice-croma.html) | La hélice de la altura de Shepard; doble hélice de las dos escalas de tonos enteros. | 1 | 9/8 |
 | 24 | [Armonógrafo](pruebas/24-armonografo.html) | Péndulos amortiguados que dibujan el cociente: figuras que decaen en espiral. | 2 | 9/7 |
 | 25 | [Nudo armónico 3D](pruebas/25-nudo-armonico.html) | Un Lissajous en el espacio: 3 senos en cociente entero tejen un nudo. 4:5:6 = mayor. | 2 | 9/7 |
+| 30 | [Espiral de overtonos](pruebas/30-espiral-overtonos.html) | La espiral de la altura: una vuelta = una octava; las octavas se alinean en el mismo radio. | 2 | 9/8 |
+| 31 | [La coma que deriva](pruebas/31-coma-pump.html) | El comma pump: en entonación justa el tónico deriva una coma sintónica por vuelta. | 2 | 8/10 |
 
 **III · Física y espectro**
 
@@ -94,7 +99,7 @@ la pieza 07; el 07 mismo lo sincroniza con su toggle Scriabin/sinestesia.
 
 ## Los cinco rumbos (todos recorridos ✦)
 
-- **A · Galería + navegador** — el `index.html` con las 26 piezas en 5 categorías.
+- **A · Galería + navegador** — el `index.html` con las 31 piezas en 5 categorías.
 - **B · Showpiece profundo** — Tonnetz 3D toroidal y orbifolds de díadas (14), tríadas (15) y tétradas (22).
 - **C · Ensayo explorable** — [`ensayo.html`](ensayo.html): scrollytelling de 10 paradas con widgets.
 - **D · Playground en vivo** — el **Instrumento (13)**: tocas y el círculo + Tonnetz + ondas reaccionan.
@@ -142,7 +147,12 @@ music0/
     ├── 23-helice-croma.html
     ├── 24-armonografo.html
     ├── 25-nudo-armonico.html
-    └── 26-chladni-3d.html
+    ├── 26-chladni-3d.html
+    ├── 27-secuenciador-tonnetz.html
+    ├── 28-musica-infinita.html
+    ├── 29-teclado-isomorfico.html
+    ├── 30-espiral-overtonos.html
+    └── 31-coma-pump.html
 ```
 
 ## Stack

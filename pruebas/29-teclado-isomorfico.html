@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>29 · Teclado isomórfico — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:pointer;touch-action:none}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:110px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:30px;text-align:right}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">29 · TECLADO ISOMÓRFICO</h1>
+  <span class="sub">Wicki–Hayden · la misma forma sirve en cualquier tonalidad</span>
+</div>
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">forma</span>
+    <span class="chip" id="shMaj">acorde mayor</span>
+    <span class="chip" id="shMin">menor</span>
+    <span class="chip" id="shScale">escala mayor</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">teclas</span>
+    <span class="chip" id="kbd">ASDF / QWER</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">labels</span>
+    <span class="chip on" id="lab">notas</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">volumen</span>
+    <input type="range" id="vol" min="0" max="100" value="55" step="1">
+    <span class="val" id="volVal">55</span>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // color por clase de altura — capa de color compartida (croma/Scriabin/quintas vía localStorage)
+  const SCRIABIN=['#FF0000','#8A2BE2','#FFFF00','#6E7B8B','#87CEEB','#8B0000','#3A6BFF','#FF7A00','#B23AC6','#2ECC40','#8FA1B3','#BFD7FF'];
+  function palMode(){try{return localStorage.getItem('music0-pal')||'croma';}catch(e){return 'croma';}}
+  function hexRGB(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+  function pcColor(pc,a){ const m=palMode();
+    if(m==='scriabin'){const c=hexRGB(SCRIABIN[pc]);return "rgba("+c[0]+","+c[1]+","+c[2]+","+a+")";}
+    const hue=(m==='quintas'?((pc*7)%12):pc)*30;
+    return "hsla("+(hue%360)+",85%,62%,"+a+")"; }
+  // tono (hue) por croma, para halos en composite "lighter"
+  function pcHue(pc){ const m=palMode(); if(m==='scriabin') return null;
+    return ((m==='quintas'?((pc*7)%12):pc)*30)%360; }
+
+  // -------------------------------------------------------------
+  // MAPEO WICKI–HAYDEN
+  // El teclado isomórfico coloca las alturas en una rejilla regular.
+  // En Wicki–Hayden:
+  //   +1 celda a la DERECHA  = +2 semitonos (un tono)
+  //   +1 fila ARRIBA-DERECHA = +7 semitonos (quinta justa)
+  //   +1 fila ARRIBA-IZQDA   = +5 semitonos (cuarta justa)
+  // Con las filas desplazadas medio hexágono, esto se cumple geométricamente:
+  //   pitch(col,row) = base + 2*col + 7*row
+  // "Isomórfico" = misma FORMA de intervalos en cualquier posición; por eso un
+  // acorde mayor es SIEMPRE el mismo triángulo de 3 hexágonos, lo muevas donde
+  // lo muevas. Aquí lo demostramos resaltando esa forma.
+  // -------------------------------------------------------------
+  const BASE_MIDI=60;        // C4 ancla la celda (0,0)
+  const COLS=9;              // columnas por fila
+  const ROWS=5;              // filas
+  // offset de columnas para centrar la rejilla alrededor de (0,0)
+  const COL0=-(COLS>>1);     // -4 .. +4
+  const ROW0=-(ROWS>>1);     // -2 .. +2
+
+  function pitchAt(col,row){ return BASE_MIDI + 2*col + 7*row; }
+
+  // -------------------------------------------------------------
+  // GEOMETRÍA HEXAGONAL (hexágonos apuntando arriba, "pointy-top")
+  // Para que +derecha sea +tono y arriba-derecha la quinta, desplazamos
+  // las filas impares medio hexágono y las apilamos con la separación vertical
+  // adecuada. La fila "row" sube en pantalla (y menor).
+  // -------------------------------------------------------------
+  let HEXR=46;               // radio del hexágono (se recalcula en resize)
+  function hexW(){ return Math.sqrt(3)*HEXR; }   // ancho (vértice a vértice horizontal)
+  function rowH(){ return HEXR*1.5; }            // separación vertical entre filas
+
+  let camX=0, camY=0;        // desplazamiento de cámara (px), para mover la forma/teclado
+  let W,H,dpr;
+
+  // posición en pantalla del centro de la celda (col,row)
+  function cellPos(col,row){
+    const cx=W/2 + camX;
+    const cy=H/2 + camY;
+    // desplazamiento horizontal de filas: medio hexágono por fila (para encajar la red)
+    const x = cx + (col + row*0.5)*hexW();
+    const y = cy - row*rowH();
+    return {x:x, y:y};
+  }
+
+  // celdas de la rejilla
+  const cells=[];
+  function buildCells(){
+    cells.length=0;
+    for(let r=0;r<ROWS;r++){
+      for(let cI=0;cI<COLS;cI++){
+        const col=COL0+cI, row=ROW0+r;
+        const midi=pitchAt(col,row);
+        cells.push({
+          col:col, row:row, midi:midi,
+          pc:((midi%12)+12)%12,
+          flash:0,            // resplandor al sonar
+          held:false          // mantenido por puntero/tecla
+        });
+      }
+    }
+  }
+
+  // -------------------------------------------------------------
+  // AUDIO  (solo tras gesto) — polifónico
+  // -------------------------------------------------------------
+  let actx=null, master=null;
+  let volume=0.55;
+  function ctxOn(){
+    if(!actx){
+      actx=new (window.AudioContext||window.webkitAudioContext)();
+      master=actx.createGain();
+      master.gain.value=volume;
+      master.connect(actx.destination);
+    }
+    if(actx.state==="suspended") actx.resume();
+    return actx;
+  }
+  // voces activas por midi (para soltar al levantar)
+  const voices={};
+  function noteOn(midi){
+    const a=ctxOn(), t=a.currentTime;
+    if(voices[midi]) return;            // ya sonando
+    const g=a.createGain();
+    g.connect(master);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.20,t+0.02);
+    const o=a.createOscillator();
+    o.type="triangle";
+    o.frequency.value=freq(midi);
+    o.connect(g);
+    o.start(t);
+    voices[midi]={o:o,g:g};
+  }
+  function noteOff(midi){
+    const v=voices[midi]; if(!v) return;
+    const a=actx, t=a.currentTime;
+    try{
+      v.g.gain.cancelScheduledValues(t);
+      v.g.gain.setValueAtTime(Math.max(v.g.gain.value,0.0001),t);
+      v.g.gain.exponentialRampToValueAtTime(0.0001,t+0.18);
+      v.o.stop(t+0.20);
+    }catch(e){}
+    delete voices[midi];
+  }
+  // pulsación corta (clic puntual): ataque+caída sin mantener
+  function pluck(midi,dur){
+    const a=ctxOn(), t=a.currentTime; dur=dur||0.6;
+    const g=a.createGain(); g.connect(master);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.20,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    const o=a.createOscillator(); o.type="triangle";
+    o.frequency.value=freq(midi); o.connect(g);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+
+  function flashCell(c){ c.flash=1; }
+
+  // -------------------------------------------------------------
+  // FORMAS ISOMÓRFICAS (offsets en celdas {dcol,drow} relativos al ancla)
+  // Cada forma produce los intervalos correctos en CUALQUIER posición
+  // porque la rejilla es regular. Un acorde mayor (raíz, 3ª mayor=+4, 5ª=+7):
+  //   +4 semitonos = 2*col(+2) ... usamos {dcol:+2,drow:0}? -> 2*2=+4  ✓
+  //   +7 semitonos = quinta = {dcol:0,drow:+1}              -> 7        ✓
+  // -> triángulo: raíz, +2 col (tercera mayor), +1 fila (quinta).
+  // -------------------------------------------------------------
+  const SHAPES={
+    maj:{ name:"acorde mayor", cells:[{dc:0,dr:0},{dc:2,dr:0},{dc:0,dr:1}],
+          label:"+4 (3ª M) a la derecha · +7 (5ª) arriba-derecha" },
+    // menor: 3ª menor=+3 -> {dc:-2,dr:1} (2*-2 + 7 = +3) ; 5ª=+7 -> {dc:0,dr:1}
+    min:{ name:"acorde menor", cells:[{dc:0,dr:0},{dc:-2,dr:1},{dc:0,dr:1}],
+          label:"3ª menor (+3) y quinta (+7) — mismo molde, otra silueta" },
+    // escala mayor: grados 0,2,4,5,7,9,11 -> celdas en la red Wicki–Hayden
+    scale:{ name:"escala mayor", cells:[
+              {dc:0,dr:0},   // 0  raíz
+              {dc:1,dr:0},   // 2  2ª
+              {dc:2,dr:0},   // 4  3ª
+              {dc:-1,dr:1},  // 5  4ª  (2*-1+7=5)
+              {dc:0,dr:1},   // 7  5ª
+              {dc:1,dr:1},   // 9  6ª
+              {dc:2,dr:1}    // 11 7ª
+            ],
+          label:"7 notas: una banda compacta que se desliza intacta" }
+  };
+  let activeShape=null;          // clave en SHAPES o null
+  // ancla de la forma (col,row) — se arrastra con el ratón cuando hay forma activa
+  let shapeAnchor={col:0,row:0};
+
+  // ¿forma contiene esta celda? devuelve true/false según ancla actual
+  function cellInShape(c){
+    if(!activeShape) return false;
+    const sh=SHAPES[activeShape];
+    for(let i=0;i<sh.cells.length;i++){
+      if(c.col===shapeAnchor.col+sh.cells[i].dc && c.row===shapeAnchor.row+sh.cells[i].dr) return true;
+    }
+    return false;
+  }
+  // toca todas las notas de la forma en su ancla actual (acorde/arpegio)
+  function playShape(arpeggio){
+    if(!activeShape) return;
+    ctxOn();
+    const sh=SHAPES[activeShape];
+    sh.cells.forEach(function(off,i){
+      const m=pitchAt(shapeAnchor.col+off.dc, shapeAnchor.row+off.dr);
+      const cell=cellByColRow(shapeAnchor.col+off.dc, shapeAnchor.row+off.dr);
+      const delay = arpeggio ? i*0.085 : 0;
+      setTimeout(function(){ pluck(m, arpeggio?0.5:0.9); if(cell) flashCell(cell); }, delay*1000);
+    });
+  }
+  function cellByColRow(col,row){
+    for(let i=0;i<cells.length;i++){ if(cells[i].col===col && cells[i].row===row) return cells[i]; }
+    return null;
+  }
+
+  // -------------------------------------------------------------
+  // CANVAS
+  // -------------------------------------------------------------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    // ajustar el radio del hexágono al espacio disponible
+    const fitW=(W*0.92)/((COLS+ (ROWS-1)*0.5)*Math.sqrt(3));
+    const fitH=(H*0.66)/(1.5*(ROWS-1)+2);
+    HEXR=Math.max(26,Math.min(54,Math.min(fitW,fitH)));
+  }
+  window.addEventListener("resize",resize);
+
+  // -------------------------------------------------------------
+  // DIBUJO DE HEXÁGONOS
+  // -------------------------------------------------------------
+  function hexPath(x,y,r){
+    ctx.beginPath();
+    for(let i=0;i<6;i++){
+      const a=Math.PI/180*(60*i-90);     // pointy-top
+      const px=x+r*Math.cos(a), py=y+r*Math.sin(a);
+      i?ctx.lineTo(px,py):ctx.moveTo(px,py);
+    }
+    ctx.closePath();
+  }
+
+  function drawCell(c){
+    const p=cellPos(c.col,c.row);
+    const r=HEXR;
+    const inShape=cellInShape(c);
+    const lit=c.flash>0.01 || c.held;
+    const glow=Math.max(c.flash, c.held?0.85:0);
+    const hue=pcHue(c.pc);
+
+    // relleno tenue por clase de altura
+    ctx.globalCompositeOperation="source-over";
+    hexPath(p.x,p.y,r*0.93);
+    ctx.fillStyle = pcColor(c.pc, 0.10 + (inShape?0.10:0) + glow*0.28 );
+    ctx.fill();
+
+    // borde
+    hexPath(p.x,p.y,r*0.93);
+    if(inShape){
+      ctx.strokeStyle=pcColor(c.pc,0.85);
+      ctx.lineWidth=2.4;
+    } else {
+      ctx.strokeStyle="rgba(123,123,160,"+(0.22+glow*0.5)+")";
+      ctx.lineWidth=1.2;
+    }
+    ctx.stroke();
+
+    // resplandor neón al sonar / mantener / en forma
+    if(glow>0.01 || inShape){
+      ctx.save();
+      ctx.globalCompositeOperation="lighter";
+      const ga = glow>0.01 ? glow : 0.5;
+      const gr=r*(1.3+ga*0.7);
+      const grad=ctx.createRadialGradient(p.x,p.y,r*0.2,p.x,p.y,gr);
+      const a0=0.45*ga + (inShape?0.28:0);
+      if(hue===null){
+        grad.addColorStop(0,pcColor(c.pc,a0));
+        grad.addColorStop(1,pcColor(c.pc,0));
+      } else {
+        grad.addColorStop(0,"hsla("+hue+",90%,65%,"+a0.toFixed(3)+")");
+        grad.addColorStop(1,"hsla("+hue+",90%,65%,0)");
+      }
+      ctx.fillStyle=grad;
+      hexPath(p.x,p.y,gr); ctx.fill();
+      ctx.restore();
+    }
+
+    // etiqueta: nombre de nota
+    if(showLabels){
+      ctx.globalCompositeOperation="source-over";
+      const la = lit?1 : (inShape?0.95:0.6);
+      ctx.fillStyle="rgba(233,233,245,"+la+")";
+      ctx.font="700 "+(r*0.42).toFixed(1)+"px ui-monospace,Menlo,monospace";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(NOTAS[c.pc], p.x, p.y - r*0.04);
+      // número de octava pequeño
+      ctx.fillStyle="rgba(126,126,160,"+(0.55*la+0.2)+")";
+      ctx.font="600 "+(r*0.24).toFixed(1)+"px ui-monospace,Menlo,monospace";
+      ctx.fillText(String(Math.floor(c.midi/12)-1), p.x, p.y + r*0.34);
+    }
+  }
+
+  // conexiones de la forma (líneas que unen los hexágonos de la silueta)
+  function drawShapeLinks(){
+    if(!activeShape) return;
+    const sh=SHAPES[activeShape];
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.strokeStyle="rgba(62,232,208,0.55)";
+    ctx.lineWidth=2;
+    const pts=sh.cells.map(function(off){
+      return cellPos(shapeAnchor.col+off.dc, shapeAnchor.row+off.dr);
+    });
+    // unir el primero (raíz) con los demás como abanico para sugerir la silueta
+    ctx.beginPath();
+    for(let i=1;i<pts.length;i++){
+      ctx.moveTo(pts[0].x,pts[0].y); ctx.lineTo(pts[i].x,pts[i].y);
+    }
+    // y contorno secuencial
+    for(let i=0;i<pts.length;i++){ i?ctx.lineTo(pts[i].x,pts[i].y):ctx.moveTo(pts[i].x,pts[i].y); }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawHUD(){
+    ctx.save();
+    ctx.globalCompositeOperation="source-over";
+    ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+    ctx.font="500 12px ui-monospace,Menlo,monospace";
+    let msg;
+    if(activeShape){
+      const root=pitchAt(shapeAnchor.col,shapeAnchor.row);
+      const sh=SHAPES[activeShape];
+      ctx.fillStyle="#3ee8d0";
+      ctx.fillText("forma: "+sh.name+" sobre "+NOTAS[((root%12)+12)%12]+
+        "  ·  arrástrala o usa flechas · clic dentro = sonar la forma", W/2, H-96);
+      ctx.fillStyle="#7e7ea0";
+      ctx.fillText(sh.label+"  ·  la silueta no cambia: por eso es isomórfico", W/2, H-78);
+    } else {
+      ctx.fillStyle="#7e7ea0";
+      ctx.fillText("clic/táctil en un hexágono para tocar · arrastra para acordes · "+
+        "elige una FORMA y muévela: suena igual en cualquier tonalidad", W/2, H-86);
+    }
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------
+  // RENDER LOOP
+  // -------------------------------------------------------------
+  let last=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=last? Math.min((now-last)/1000,0.05):0;
+    last=now;
+    for(let i=0;i<cells.length;i++){ const c=cells[i]; if(c.flash>0) c.flash=Math.max(0,c.flash-dt*2.2); }
+
+    ctx.clearRect(0,0,W,H);
+    // dibujar primero las celdas que NO están en la forma, luego las de la forma (encima)
+    for(let i=0;i<cells.length;i++){ if(!cellInShape(cells[i])) drawCell(cells[i]); }
+    drawShapeLinks();
+    for(let i=0;i<cells.length;i++){ if(cellInShape(cells[i])) drawCell(cells[i]); }
+    drawHUD();
+  }
+
+  // -------------------------------------------------------------
+  // HIT-TEST por cercanía al centro de cada hexágono
+  // -------------------------------------------------------------
+  function cellAt(mx,my){
+    let best=null, bd=1e9;
+    for(let i=0;i<cells.length;i++){
+      const p=cellPos(cells[i].col,cells[i].row);
+      const d=Math.hypot(p.x-mx,p.y-my);
+      if(d<bd){ bd=d; best=cells[i]; }
+    }
+    // dentro del hexágono aprox. si la distancia al centro < apotema
+    if(best && bd < HEXR*0.92) return best;
+    return null;
+  }
+
+  function getXY(e){
+    const r=cv.getBoundingClientRect();
+    const t=(e.touches&&e.touches[0]) || (e.changedTouches&&e.changedTouches[0]) || e;
+    return {x:t.clientX-r.left, y:t.clientY-r.top};
+  }
+
+  // -------------------------------------------------------------
+  // INTERACCIÓN PUNTERO (polifónico: arrastrar enciende celdas)
+  //   - sin forma activa: cada hexágono tocado suena (mantener = sostener)
+  //   - con forma activa: clic dentro toca el acorde/escala; arrastrar fuera
+  //     mueve el ancla de la forma por el teclado
+  // -------------------------------------------------------------
+  const pointers={};        // id -> última celda tocada
+  let draggingShape=false, dragStart=null, anchorStart=null;
+
+  function onDown(e){
+    if(e.cancelable) e.preventDefault();
+    ctxOn();
+    const xy=getXY(e);
+    const id=(e.touches&&e.changedTouches[0])?e.changedTouches[0].identifier:"m";
+    const cell=cellAt(xy.x,xy.y);
+
+    if(activeShape){
+      if(cell && cellInShape(cell)){
+        // clic dentro de la forma -> suena la forma completa
+        playShape(false);
+        return;
+      }
+      // arrastrar para mover la forma (toma una celda como nuevo ancla)
+      draggingShape=true; dragStart=xy; anchorStart={col:shapeAnchor.col,row:shapeAnchor.row};
+      if(cell){ shapeAnchor={col:cell.col,row:cell.row}; playShape(false); }
+      return;
+    }
+
+    if(cell){
+      noteOn(cell.midi); cell.held=true; flashCell(cell);
+      pointers[id]=cell;
+    }
+  }
+
+  function onMove(e){
+    const xy=getXY(e);
+    const id=(e.touches&&e.changedTouches[0])?e.changedTouches[0].identifier:"m";
+
+    if(activeShape && draggingShape){
+      // mover el ancla a la celda bajo el puntero
+      const cell=cellAt(xy.x,xy.y);
+      if(cell && (cell.col!==shapeAnchor.col || cell.row!==shapeAnchor.row)){
+        shapeAnchor={col:cell.col,row:cell.row};
+      }
+      if(e.cancelable) e.preventDefault();
+      return;
+    }
+
+    // sin forma: glissando — al entrar en una celda nueva, suénala
+    const prev=pointers[id];
+    if(prev!==undefined){
+      const cell=cellAt(xy.x,xy.y);
+      if(cell!==prev){
+        if(prev){ noteOff(prev.midi); prev.held=false; }
+        if(cell){ noteOn(cell.midi); cell.held=true; flashCell(cell); }
+        pointers[id]=cell;
+      }
+      if(e.cancelable) e.preventDefault();
+    }
+  }
+
+  function onUp(e){
+    const id=(e.changedTouches&&e.changedTouches[0])?e.changedTouches[0].identifier:"m";
+    if(draggingShape){ draggingShape=false; return; }
+    const cell=pointers[id];
+    if(cell){ noteOff(cell.midi); cell.held=false; }
+    delete pointers[id];
+  }
+
+  cv.addEventListener("mousedown",onDown);
+  window.addEventListener("mousemove",onMove);
+  window.addEventListener("mouseup",onUp);
+  cv.addEventListener("touchstart",onDown,{passive:false});
+  cv.addEventListener("touchmove",onMove,{passive:false});
+  cv.addEventListener("touchend",onUp);
+  cv.addEventListener("touchcancel",onUp);
+
+  // -------------------------------------------------------------
+  // TECLADO DE ORDENADOR (opcional) — dos filas físicas mapeadas a la red
+  //   fila inferior (ZXCV...) -> row=ROW0 ; fila ASDF -> row interior ;
+  //   QWER -> fila superior. Cada tecla = una columna creciente (+tono).
+  // -------------------------------------------------------------
+  let kbdOn=false;
+  // mapa tecla -> {col,row} relativo a la rejilla central
+  const KEYROWS=[
+    {keys:"zxcvbnm,", row:ROW0},
+    {keys:"asdfghjkl", row:ROW0+1},
+    {keys:"qwertyuiop", row:ROW0+2}
+  ];
+  const keyMap={};
+  KEYROWS.forEach(function(kr){
+    for(let i=0;i<kr.keys.length;i++){
+      const col=COL0+i;
+      if(col>COL0+COLS-1) break;
+      keyMap[kr.keys[i]]={col:col,row:kr.row};
+    }
+  });
+  const downKeys={};
+  window.addEventListener("keydown",function(e){
+    if(e.repeat) return;
+    // flechas: mover la forma activa
+    if(activeShape){
+      let moved=false;
+      if(e.key==="ArrowRight"){ shapeAnchor.col++; moved=true; }
+      else if(e.key==="ArrowLeft"){ shapeAnchor.col--; moved=true; }
+      else if(e.key==="ArrowUp"){ shapeAnchor.row++; moved=true; }
+      else if(e.key==="ArrowDown"){ shapeAnchor.row--; moved=true; }
+      if(moved){ playShape(false); e.preventDefault(); return; }
+      if(e.key===" "){ playShape(true); e.preventDefault(); return; } // arpegio
+    }
+    if(!kbdOn) return;
+    const k=e.key.toLowerCase();
+    const m=keyMap[k];
+    if(m && !downKeys[k]){
+      const cell=cellByColRow(m.col,m.row);
+      if(cell){ noteOn(cell.midi); cell.held=true; flashCell(cell); downKeys[k]=cell; }
+    }
+  });
+  window.addEventListener("keyup",function(e){
+    const k=e.key.toLowerCase();
+    const cell=downKeys[k];
+    if(cell){ noteOff(cell.midi); cell.held=false; delete downKeys[k]; }
+  });
+
+  // -------------------------------------------------------------
+  // CONTROLES (panel)
+  // -------------------------------------------------------------
+  const shMaj=document.getElementById("shMaj");
+  const shMin=document.getElementById("shMin");
+  const shScale=document.getElementById("shScale");
+  const shapeEls={maj:shMaj,min:shMin,scale:shScale};
+  function setShape(key){
+    activeShape = (activeShape===key)? null : key;
+    Object.keys(shapeEls).forEach(function(k){ shapeEls[k].classList.toggle("on", activeShape===k); });
+    if(activeShape){
+      // anclar en una posición visible que mantenga la forma dentro de la rejilla
+      shapeAnchor={col:Math.max(COL0, Math.min(COL0+COLS-3, -1)), row:ROW0+1};
+    }
+  }
+  shMaj.addEventListener("click",function(){ ctxOn(); setShape("maj"); });
+  shMin.addEventListener("click",function(){ ctxOn(); setShape("min"); });
+  shScale.addEventListener("click",function(){ ctxOn(); setShape("scale"); });
+
+  const kbdEl=document.getElementById("kbd");
+  kbdEl.addEventListener("click",function(){
+    kbdOn=!kbdOn; kbdEl.classList.toggle("on",kbdOn);
+  });
+
+  let showLabels=true;
+  const labEl=document.getElementById("lab");
+  labEl.addEventListener("click",function(){
+    showLabels=!showLabels; labEl.classList.toggle("on",showLabels);
+  });
+
+  const volEl=document.getElementById("vol"), volVal=document.getElementById("volVal");
+  function applyVol(){ const v=+volEl.value; volVal.textContent=v; volume=(v/100)*0.9; if(master) master.gain.value=volume; }
+  volEl.addEventListener("input",applyVol);
+  applyVol();
+
+  // -------------------------------------------------------------
+  buildCells();
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

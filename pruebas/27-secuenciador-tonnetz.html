@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>27 · Secuenciador del Tonnetz — music0</title>
+<style>
+  :root{--bg:#06060d;--txt:#e9e9f5;--dim:#7e7ea0;--cy:#3ee8d0;--mg:#ff4d9d;--yl:#e9ff5a;--pu:#9b6bff;--bl:#5aa9ff;--mono:ui-monospace,Menlo,Consolas,monospace;--sans:system-ui,-apple-system,Segoe UI,sans-serif;}
+  *{box-sizing:border-box;margin:0;padding:0} html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none} .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;backdrop-filter:blur(6px)} .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em} .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none} .chip:hover{color:var(--txt);border-color:#444466} .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap} .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em} .sep{width:1px;height:24px;background:#23233e} input[type=range]{accent-color:var(--mg)}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:30px;text-align:right}
+  /* barra de pasos */
+  .steps{position:fixed;left:50%;bottom:84px;transform:translateX(-50%);z-index:5;display:flex;gap:6px;align-items:center;justify-content:center;max-width:min(960px,95vw);padding:8px 10px;background:#0c0c1899;backdrop-filter:blur(8px);border:1px solid #20203a;border-radius:14px;overflow-x:auto}
+  .step{flex:0 0 auto;width:46px;height:46px;border:1px solid #2a2a44;border-radius:10px;background:#0a0a16;color:var(--dim);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;font:700 13px var(--mono);transition:.12s;line-height:1.1;padding:2px}
+  .step:hover{border-color:#444466}
+  .step small{font:600 9px var(--mono);color:var(--dim);font-weight:600}
+  .step.maj{color:var(--cy);border-color:#1f5a52}
+  .step.min{color:var(--mg);border-color:#5a1f3c}
+  .step.sel{box-shadow:0 0 0 2px var(--yl);border-color:var(--yl)}
+  .step.cur{background:#16162a}
+  .step.play{box-shadow:0 0 14px var(--pu),0 0 0 2px var(--pu)}
+  .hint{position:fixed;left:18px;bottom:18px;z-index:4;font:500 11px/1.6 var(--mono);color:var(--dim);max-width:260px;pointer-events:none}
+  .hint b{color:var(--yl)} .hint i{color:var(--cy);font-style:normal} .hint u{color:var(--mg);text-decoration:none}
+  @media(max-width:680px){
+    .panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}
+    .panel .grp{flex-wrap:nowrap}
+    .steps{left:8px;right:8px;transform:none;max-width:none;justify-content:flex-start}
+    .hint{display:none}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">27 · SECUENCIADOR DEL TONNETZ</h1>
+  <span class="sub">teje una progresión y mírala recorrer la retícula</span>
+</div>
+
+<div class="steps" id="steps"></div>
+
+<div class="panel">
+  <div class="grp">
+    <button class="chip" id="play">▶ play</button>
+    <button class="chip" id="clear">limpiar</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">tempo</span>
+    <input type="range" id="bpm" min="40" max="200" value="96" step="1">
+    <span class="val" id="bpmv">96</span>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <span class="lbl">pasos</span>
+    <button class="chip" data-n="4">4</button>
+    <button class="chip on" data-n="8">8</button>
+    <button class="chip" data-n="16">16</button>
+  </div>
+</div>
+
+<div class="hint">
+  selecciona un <b>paso</b> abajo y haz <i>clic</i> en un triángulo del Tonnetz para fijar su acorde.<br>
+  ▲ <i>mayor</i> · ▼ <u>menor</u> · doble clic en un paso lo vacía.
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const MONO="ui-monospace,Menlo,Consolas,monospace";
+
+  // ---------------- canvas ----------------
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  let W,H,dpr,S,cx,cy;
+  const K=Math.sqrt(3)/2;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;
+    cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2; cy=H/2 - 24; S=Math.max(54,Math.min(96,Math.min(W,H)/8));
+  }
+  window.addEventListener('resize',resize);
+
+  // ---------------- Tonnetz ----------------
+  function P(a,b){ return { x: cx + a*S + b*S/2, y: cy - b*S*K }; }
+  function pc(a,b){ return ((7*a + 4*b)%12 + 12)%12; }
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // triángulo bajo coords de pantalla -> acorde
+  function triAt(mx,my){
+    const b=-(my-cy)/(S*K);
+    const a=((mx-cx)-b*S/2)/S;
+    const i=Math.floor(a), j=Math.floor(b);
+    const fa=a-i, fb=b-j;
+    let verts, major;
+    if(fa+fb<1){ verts=[[i,j],[i+1,j],[i,j+1]]; major=true; }
+    else       { verts=[[i+1,j],[i,j+1],[i+1,j+1]]; major=false; }
+    const v=pc(i,j);
+    const root = major ? v : (v+4)%12;
+    return chord(root, major, verts);
+  }
+  // construye objeto acorde a partir de raíz/calidad + vértices opcionales
+  function chord(root, major, verts){
+    const pcs = major ? [root,(root+4)%12,(root+7)%12]
+                      : [root,(root+3)%12,(root+7)%12];
+    if(!verts){
+      // localiza un triángulo en la retícula para esta raíz/calidad cerca del centro
+      verts = findVerts(root, major);
+    }
+    const ps=verts.map(([a,b])=>P(a,b));
+    return {
+      root, major, pcs, verts, ps,
+      name: NOTAS[root]+(major?' mayor':' menor'),
+      cxp:(ps[0].x+ps[1].x+ps[2].x)/3,
+      cyp:(ps[0].y+ps[1].y+ps[2].y)/3
+    };
+  }
+  // busca los vértices del triángulo (▲ mayor / ▼ menor) de una raíz dada,
+  // eligiendo el más cercano al centro de pantalla visible.
+  function findVerts(root, major){
+    let best=null, bestD=Infinity;
+    for(let b=-7;b<=7;b++){
+      for(let a=-9;a<=9;a++){
+        let verts, r;
+        // triángulo mayor: (a,b),(a+1,b),(a,b+1), raíz pc(a,b)
+        r=pc(a,b);
+        if(major && r===root){ verts=[[a,b],[a+1,b],[a,b+1]]; }
+        // triángulo menor hacia abajo: (a+1,b),(a,b+1),(a+1,b+1), raíz (pc(a,b)+4)%12
+        else if(!major && (r+4)%12===root){ verts=[[a+1,b],[a,b+1],[a+1,b+1]]; }
+        else continue;
+        const ps=verts.map(([va,vb])=>P(va,vb));
+        const mx=(ps[0].x+ps[1].x+ps[2].x)/3, my=(ps[0].y+ps[1].y+ps[2].y)/3;
+        const d=(mx-cx)*(mx-cx)+(my-cy)*(my-cy);
+        if(d<bestD){ bestD=d; best=verts; }
+      }
+    }
+    return best || [[0,0],[1,0],[0,1]];
+  }
+
+  // ---------------- estado del secuenciador ----------------
+  let numSteps=8;
+  let steps=new Array(16).fill(null); // cada elemento: {root,major} o null
+  let selected=0;
+  let current=-1;     // paso sonando (modo play)
+  let playing=false;
+  let bpm=96;
+
+  // progresión por defecto: C - G - Am - F  (I - V - vi - IV)
+  function loadDefault(){
+    steps=new Array(16).fill(null);
+    steps[0]={root:0,major:true};   // C
+    steps[1]={root:7,major:true};   // G
+    steps[2]={root:9,major:false};  // Am
+    steps[3]={root:5,major:true};   // F
+    numSteps=8;
+    setNumButtons();
+    selected=0;
+    rebuildSteps();
+  }
+
+  // ---------------- audio ----------------
+  let actx=null;
+  function ctxOn(){
+    if(!actx) actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
+    return actx;
+  }
+  function playChord(st, when){
+    if(!st) return;
+    const a=ctxOn();
+    const t = (when!=null) ? when : a.currentTime;
+    const beat = 60/bpm;
+    const dur = Math.min(1.4, beat*0.95);
+    const pcs = st.major ? [st.root,(st.root+4)%12,(st.root+7)%12]
+                         : [st.root,(st.root+3)%12,(st.root+7)%12];
+    const g=a.createGain(); g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16,t+0.018);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    pcs.forEach(function(p){
+      const o=a.createOscillator();
+      o.type='triangle';
+      o.frequency.value=freq(60+p);
+      o.connect(g);
+      o.start(t);
+      o.stop(t+dur+0.05);
+    });
+  }
+
+  // ---------------- reloj (scheduler basado en AudioContext) ----------------
+  let nextStepTime=0;     // tiempo de audio del próximo paso
+  let scheduleStep=0;     // índice que se va a programar
+  let timer=null;         // setTimeout de mira-adelante
+  const LOOKAHEAD=0.10;   // s programados por adelantado
+  const TICK=25;          // ms del bucle de planificación
+  // visual: cola de pasos ya programados {idx, time}
+  let queue=[];
+
+  function scheduler(){
+    const a=ctxOn();
+    const beat=60/bpm;
+    while(nextStepTime < a.currentTime + LOOKAHEAD){
+      const idx=scheduleStep % numSteps;
+      const st=steps[idx];
+      if(st) playChord(st, nextStepTime);
+      queue.push({idx:idx, time:nextStepTime});
+      nextStepTime += beat;
+      scheduleStep++;
+    }
+    timer=setTimeout(scheduler, TICK);
+  }
+  function startPlay(){
+    const a=ctxOn();
+    playing=true;
+    scheduleStep=0;
+    queue=[];
+    nextStepTime=a.currentTime + 0.06;
+    scheduler();
+    document.getElementById('play').textContent='⏸ pausa';
+    document.getElementById('play').classList.add('on');
+  }
+  function stopPlay(){
+    playing=false;
+    if(timer){ clearTimeout(timer); timer=null; }
+    queue=[];
+    current=-1;
+    document.getElementById('play').textContent='▶ play';
+    document.getElementById('play').classList.remove('on');
+    rebuildSteps();
+  }
+  function restartIfPlaying(){
+    if(playing){ if(timer){clearTimeout(timer);timer=null;} startPlay(); }
+  }
+
+  // avanza la cola visual: el paso "actual" es el último cuyo time ya pasó
+  function tickVisual(){
+    if(!playing || !actx) return;
+    const now=actx.currentTime;
+    while(queue.length && queue[0].time <= now){
+      current=queue[0].idx;
+      queue.shift();
+    }
+  }
+
+  // ---------------- UI: barra de pasos ----------------
+  const stepsEl=document.getElementById('steps');
+  function rebuildSteps(){
+    stepsEl.innerHTML='';
+    for(let i=0;i<numSteps;i++){
+      const d=document.createElement('div');
+      d.className='step';
+      const st=steps[i];
+      if(st){
+        d.classList.add(st.major?'maj':'min');
+        d.innerHTML = NOTAS[st.root] + '<small>' + (st.major?'▲':'▼') + '</small>';
+      } else {
+        d.innerHTML = (i+1) + '<small>·</small>';
+      }
+      if(i===selected) d.classList.add('sel');
+      if(i===current){ d.classList.add('cur'); d.classList.add('play'); }
+      d.addEventListener('click',function(){ selected=i; rebuildSteps(); });
+      d.addEventListener('dblclick',function(){ steps[i]=null; selected=i; rebuildSteps(); });
+      stepsEl.appendChild(d);
+    }
+  }
+  // refresco ligero de clases play/cur sin reconstruir todo (en cada frame)
+  function paintCurrent(){
+    const kids=stepsEl.children;
+    for(let i=0;i<kids.length;i++){
+      const on = (i===current && playing);
+      kids[i].classList.toggle('cur', on);
+      kids[i].classList.toggle('play', on);
+    }
+  }
+
+  // ---------------- controles ----------------
+  document.getElementById('play').addEventListener('click',function(){
+    if(playing) stopPlay(); else startPlay();
+  });
+  document.getElementById('clear').addEventListener('click',function(){
+    steps=new Array(16).fill(null);
+    selected=0; rebuildSteps();
+  });
+  const bpmInput=document.getElementById('bpm'), bpmv=document.getElementById('bpmv');
+  bpmInput.addEventListener('input',function(){
+    bpm=parseInt(bpmInput.value,10);
+    bpmv.textContent=bpm;
+    restartIfPlaying();
+  });
+  function setNumButtons(){
+    document.querySelectorAll('.panel .chip[data-n]').forEach(function(b){
+      b.classList.toggle('on', parseInt(b.dataset.n,10)===numSteps);
+    });
+  }
+  document.querySelectorAll('.panel .chip[data-n]').forEach(function(b){
+    b.addEventListener('click',function(){
+      numSteps=parseInt(b.dataset.n,10);
+      if(selected>=numSteps) selected=numSteps-1;
+      setNumButtons();
+      rebuildSteps();
+      restartIfPlaying();
+    });
+  });
+
+  // ---------------- interacción Tonnetz ----------------
+  let hover=null;
+  cv.addEventListener('mousemove',function(e){
+    const r=cv.getBoundingClientRect();
+    hover=triAt(e.clientX-r.left, e.clientY-r.top);
+  });
+  cv.addEventListener('mouseleave',function(){ hover=null; });
+  cv.addEventListener('click',function(e){
+    const r=cv.getBoundingClientRect();
+    const t=triAt(e.clientX-r.left, e.clientY-r.top);
+    steps[selected]={root:t.root, major:t.major};
+    pulse=t; pulseT=performance.now();
+    playChord(steps[selected]);              // realimentación al asignar
+    selected=(selected+1)%numSteps;          // avanza al siguiente paso
+    rebuildSteps();
+  });
+  let pulse=null, pulseT=0;
+
+  // ---------------- render ----------------
+  function fillTri(t,fill){
+    ctx.beginPath();
+    ctx.moveTo(t.ps[0].x,t.ps[0].y);
+    ctx.lineTo(t.ps[1].x,t.ps[1].y);
+    ctx.lineTo(t.ps[2].x,t.ps[2].y);
+    ctx.closePath();
+    ctx.fillStyle=fill; ctx.fill();
+  }
+  function strokeTri(t,col,w){
+    ctx.beginPath();
+    ctx.moveTo(t.ps[0].x,t.ps[0].y);
+    ctx.lineTo(t.ps[1].x,t.ps[1].y);
+    ctx.lineTo(t.ps[2].x,t.ps[2].y);
+    ctx.closePath();
+    ctx.lineWidth=w; ctx.strokeStyle=col; ctx.stroke();
+  }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    tickVisual();
+    paintCurrent();
+    ctx.clearRect(0,0,W,H);
+
+    const bHi=Math.ceil((cy+S)/(S*K)), bLo=Math.floor((cy-H-S)/(S*K));
+
+    // ---- aristas ----
+    ctx.strokeStyle='#161630'; ctx.lineWidth=1.1; ctx.beginPath();
+    for(let b=bLo;b<=bHi;b++){
+      const aLo=Math.floor((-S-cx-b*S/2)/S), aHi=Math.ceil((W+S-cx-b*S/2)/S);
+      for(let a=aLo;a<=aHi;a++){
+        const p=P(a,b), e1=P(a+1,b), e2=P(a,b+1), e3=P(a+1,b-1);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e1.x,e1.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e2.x,e2.y);
+        ctx.moveTo(p.x,p.y);ctx.lineTo(e3.x,e3.y);
+      }
+    }
+    ctx.stroke();
+
+    // ---- acordes asignados a pasos (relleno tenue) ----
+    const chordsSeq=[];
+    for(let i=0;i<numSteps;i++){
+      const st=steps[i];
+      if(st){
+        const c=chord(st.root, st.major);
+        chordsSeq.push(c);
+        const base = st.major ? 'rgba(62,232,208,' : 'rgba(255,77,157,';
+        fillTri(c, base+'0.07)');
+        strokeTri(c, base+(i===selected?'0.55)':'0.28)'), i===selected?2:1.2);
+      } else {
+        chordsSeq.push(null);
+      }
+    }
+
+    // ---- estela: línea entre centroides de la progresión ----
+    const pts=chordsSeq.filter(Boolean);
+    if(pts.length>=2){
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      ctx.lineWidth=2.2;
+      ctx.strokeStyle='rgba(155,107,255,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(pts[0].cxp,pts[0].cyp);
+      for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i].cxp,pts[i].cyp);
+      // cierra el bucle visual de vuelta al inicio
+      ctx.lineTo(pts[0].cxp,pts[0].cyp);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // ---- triángulo del paso actual (resaltado fuerte al reproducir) ----
+    if(playing && current>=0 && steps[current]){
+      const st=steps[current];
+      const c=chord(st.root, st.major);
+      ctx.save();
+      ctx.globalCompositeOperation='lighter';
+      const col = st.major ? 'rgba(62,232,208,' : 'rgba(255,77,157,';
+      fillTri(c, col+'0.30)');
+      strokeTri(c, col+'0.95)', 3);
+      // halo en el centroide
+      const g=ctx.createRadialGradient(c.cxp,c.cyp,0,c.cxp,c.cyp,S*0.9);
+      g.addColorStop(0, st.major?'rgba(62,232,208,0.38)':'rgba(255,77,157,0.38)');
+      g.addColorStop(1,'rgba(0,0,0,0)');
+      ctx.fillStyle=g;
+      ctx.beginPath();ctx.arc(c.cxp,c.cyp,S*0.9,0,7);ctx.fill();
+      ctx.restore();
+    }
+
+    // ---- hover ----
+    if(hover){
+      const base = hover.major ? 'rgba(233,255,90,' : 'rgba(155,107,255,';
+      fillTri(hover, (hover.major?'rgba(62,232,208,':'rgba(255,77,157,')+'0.12)');
+      strokeTri(hover, base+'0.7)', 1.6);
+    }
+
+    // ---- pulso de clic ----
+    if(pulse){
+      const k=(now-pulseT)/420;
+      if(k<1){
+        const al=(1-k)*0.5;
+        fillTri(pulse, (pulse.major?'rgba(62,232,208,':'rgba(255,77,157,')+al+')');
+      } else pulse=null;
+    }
+
+    // ---- nodos ----
+    for(let b=bLo;b<=bHi;b++){
+      const aLo=Math.floor((-S-cx-b*S/2)/S), aHi=Math.ceil((W+S-cx-b*S/2)/S);
+      for(let a=aLo;a<=aHi;a++){
+        const p=P(a,b), n=pc(a,b);
+        const lit = hover && hover.verts.some(function(v){return v[0]===a&&v[1]===b;});
+        ctx.beginPath();ctx.arc(p.x,p.y,lit?14:11,0,7);
+        ctx.fillStyle=lit?('hsl('+(n*30)+',75%,58%)'):'#0c0c18';
+        ctx.fill();
+        ctx.lineWidth=1.4;
+        ctx.strokeStyle='hsla('+(n*30)+',75%,60%,'+(lit?1:0.45)+')';
+        ctx.stroke();
+        ctx.fillStyle=lit?'#06060d':'#9a9ac0';
+        ctx.font='600 11px '+MONO;ctx.textAlign='center';ctx.textBaseline='middle';
+        ctx.fillText(NOTAS[n],p.x,p.y);
+      }
+    }
+
+    // ---- etiqueta de hover ----
+    if(hover){
+      ctx.save();
+      ctx.font='700 13px '+MONO;ctx.textAlign='center';ctx.textBaseline='bottom';
+      ctx.fillStyle=hover.major?'#3ee8d0':'#ff4d9d';
+      ctx.fillText(hover.name, hover.cxp, hover.cyp-S*0.42);
+      ctx.restore();
+    }
+  }
+
+  // ---------------- arranque ----------------
+  resize();
+  loadDefault();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

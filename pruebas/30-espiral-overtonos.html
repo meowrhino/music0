@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>30 · Espiral de overtonos — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:120px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:54px;text-align:right}
+  /* lectura del armónico seleccionado, esquina superior derecha */
+  .info{position:fixed;top:58px;right:18px;z-index:6;min-width:182px;
+    font:600 12px/1.5 var(--mono);color:var(--txt);background:#0c0c18cc;backdrop-filter:blur(8px);
+    border:1px solid #20203a;border-radius:14px;padding:12px 14px;pointer-events:none}
+  .info .k{color:var(--dim);font-weight:600}
+  .info .big{font-size:15px;color:var(--cy)}
+  .info.dim{opacity:.55}
+  .info .cents{color:var(--yl)}
+  @media(max-width:680px){
+    .panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}
+    .panel .grp{flex-wrap:nowrap}.panel .sep{display:none}
+    .panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}
+    .info{top:auto;bottom:96px;right:8px;left:8px;min-width:0}
+  }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">30 · ESPIRAL DE OVERTONOS</h1>
+  <span class="sub">una vuelta = una octava · las octavas se alinean en el mismo radio</span>
+</div>
+
+<div class="info" id="info">
+  <div class="big" id="iTitle">clic en un punto</div>
+  <div><span class="k">freq</span> <span id="iFreq">—</span></div>
+  <div><span class="k">nota</span> <span id="iNote">—</span></div>
+  <div><span class="k">cents</span> <span class="cents" id="iCents">—</span></div>
+</div>
+
+<div class="panel">
+  <span class="chip" id="play">▶ tocar serie</span>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">fundamental</span>
+    <input type="range" id="fund" min="36" max="60" value="36" step="1">
+    <span class="val" id="fundVal">C2</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">armónicos</span>
+    <input type="range" id="harm" min="6" max="24" value="16" step="1">
+    <span class="val" id="harmVal">16</span>
+  </div>
+  <span class="sep"></span>
+  <span class="chip on" id="grid">guías 12-TET</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // color por clase de altura (croma): hue = pc*30. Octavas -> mismo color.
+  function pcColor(pc, a){
+    return "hsla("+((pc*30)%360)+",85%,62%,"+a+")";
+  }
+  // pc continuo (0..12) -> color, para teñir el trazo de la espiral con suavidad
+  function pcColorF(pcf, a){
+    return "hsla("+(((pcf*30)%360+360)%360)+",85%,62%,"+a+")";
+  }
+
+  // dada una frecuencia, su MIDI exacto (puede no ser entero), la nota más
+  // cercana del 12-TET y los cents de desviación respecto a esa nota.
+  function midiOf(f){ return 69 + 12*Math.log2(f/440); }
+  function pitchInfo(f){
+    const m=midiOf(f);
+    const near=Math.round(m);
+    const cents=Math.round((m-near)*100);
+    const pc=((near%12)+12)%12;
+    const oct=Math.floor(near/12)-1;
+    return { midi:m, near:near, cents:cents, name:NOTAS[pc]+oct, pc:pc };
+  }
+  function noteName(midi){
+    const pc=((midi%12)+12)%12, oct=Math.floor(midi/12)-1;
+    return NOTAS[pc]+oct;
+  }
+
+  // -------------------------------------------------------------
+  // AUDIO (solo tras gesto)
+  // -------------------------------------------------------------
+  let actx=null;
+  function ctxOn(){
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==="suspended") actx.resume();
+    return actx;
+  }
+  function playFreq(f, dur){
+    const a=ctxOn(), t=a.currentTime;
+    dur=dur||0.9;
+    const g=a.createGain();
+    g.connect(a.destination);
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.20,t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    const o=a.createOscillator();
+    o.type="sine";
+    o.frequency.value=f;
+    o.connect(g);
+    o.start(t); o.stop(t+dur+0.05);
+  }
+
+  // -------------------------------------------------------------
+  // ESTADO
+  // -------------------------------------------------------------
+  let fundMidi=36;          // C2 por defecto (MIDI 36 -> ~65.41 Hz)
+  let nHarm=16;             // overtonos a mostrar (1..nHarm)
+  let showGrid=true;        // radios guía del 12-TET
+  let selected=-1;          // índice de armónico seleccionado (0-based -> n=idx+1)
+  let rot=0;                // rotación lenta de la vista (estética)
+
+  // reproducción de la serie en orden
+  let seqRunning=false, seqIdx=0, seqTimer=0;
+  const seqStep=0.42;
+
+  // puntos de los armónicos calculados cada frame: {n, f, x, y, r, theta, info, flash}
+  let nodes=[];
+
+  // -------------------------------------------------------------
+  // CANVAS
+  // -------------------------------------------------------------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  let W,H,dpr;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize",resize);
+
+  // -------------------------------------------------------------
+  // GEOMETRÍA DE LA ESPIRAL
+  // theta = 2*PI*log2(f/f0)  -> una octava = una vuelta completa
+  // r     = r0 + k*log2(f/f0) -> espiral de Arquímedes (paso constante por octava)
+  // f0 = frecuencia de la fundamental. Las notas de igual clase de altura
+  //      (a octavas de distancia) comparten ángulo -> quedan en el mismo radio.
+  // -------------------------------------------------------------
+  function f0(){ return freq(fundMidi); }
+  function metrics(){
+    const cx=W/2, cy=H/2 - 6;
+    const R=Math.min(W,H)*0.40;        // radio máximo aprovechable
+    const r0=Math.min(W,H)*0.085;      // radio inicial (centro hueco)
+    // octavas que abarca el armónico más alto: log2(nHarm)
+    const octs=Math.log2(Math.max(nHarm,2));
+    const k=(R-r0)/Math.max(octs,1);   // paso radial por octava, ajustado al lienzo
+    return {cx:cx, cy:cy, r0:r0, k:k, octs:octs};
+  }
+  // pos sobre la espiral para un múltiplo de octava x = log2(f/f0)
+  function spiralPos(x, m){
+    const theta = 2*Math.PI*x + rot;
+    const r = m.r0 + m.k*x;
+    return {
+      x: m.cx + r*Math.cos(theta - Math.PI/2),   // arranque arriba, gira horario
+      y: m.cy + r*Math.sin(theta - Math.PI/2),
+      r: r, theta: theta
+    };
+  }
+
+  // -------------------------------------------------------------
+  // RENDER
+  // -------------------------------------------------------------
+  let last=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=last? Math.min((now-last)/1000,0.05):0;
+    last=now;
+
+    rot += 0.05*dt;   // deriva lenta, puramente estética
+
+    // avanzar reproducción de la serie
+    if(seqRunning){
+      seqTimer-=dt;
+      if(seqTimer<=0){
+        if(seqIdx<nodes.length){
+          const nd=nodes[seqIdx];
+          playFreq(nd.f, 0.5);
+          selected=seqIdx; nd.flash=1;
+          syncInfo();
+          seqIdx++; seqTimer=seqStep;
+        } else {
+          seqRunning=false;
+          playEl.classList.remove("on");
+          playEl.textContent="▶ tocar serie";
+        }
+      }
+    }
+
+    // decaer flashes
+    for(let i=0;i<nodes.length;i++){ if(nodes[i].flash>0) nodes[i].flash=Math.max(0,nodes[i].flash-dt*1.6); }
+
+    ctx.clearRect(0,0,W,H);
+
+    const m=metrics();
+
+    if(showGrid) drawGrid(m);
+    drawSpiral(m);
+    computeNodes(m);
+    drawNodes(m);
+    drawLegend();
+  }
+
+  // 12 radios guía: una octava = 360° -> un semitono = 30°.
+  function drawGrid(m){
+    ctx.save();
+    const maxR=m.r0 + m.k*(m.octs+0.05);
+    for(let s=0;s<12;s++){
+      const theta = 2*Math.PI*(s/12) + rot - Math.PI/2;
+      const x1=m.cx + m.r0*0.55*Math.cos(theta);
+      const y1=m.cy + m.r0*0.55*Math.sin(theta);
+      const x2=m.cx + maxR*Math.cos(theta);
+      const y2=m.cy + maxR*Math.sin(theta);
+      ctx.strokeStyle = (s===0) ? "rgba(123,123,160,0.26)" : "rgba(123,123,160,0.10)";
+      ctx.lineWidth = (s===0) ? 1.4 : 1;
+      ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
+      // etiqueta de clase de altura sobre el radio (en el borde exterior)
+      const lr=maxR+13;
+      const lx=m.cx + lr*Math.cos(theta), ly=m.cy + lr*Math.sin(theta);
+      ctx.fillStyle = pcColor(s, 0.5);
+      ctx.font="600 10px ui-monospace,Menlo,monospace";
+      ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillText(NOTAS[s], lx, ly);
+    }
+    ctx.restore();
+  }
+
+  // la espiral continua, teñida según la clase de altura que cruza en cada punto
+  function drawSpiral(m){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    const steps=Math.max(60, Math.ceil(m.octs*120));
+    let prev=null, prevX=0;
+    for(let i=0;i<=steps;i++){
+      const x=(i/steps)*(m.octs+0.02);
+      const p=spiralPos(x, m);
+      if(prev){
+        // pc continuo en el punto medio para el color del segmento
+        const pcf=((x+prevX)/2)*12;
+        ctx.strokeStyle=pcColorF(pcf, 0.20);
+        ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.moveTo(prev.x,prev.y); ctx.lineTo(p.x,p.y); ctx.stroke();
+      }
+      prev=p; prevX=x;
+    }
+    ctx.restore();
+  }
+
+  // recalcula la posición de cada overtono (mantiene flash entre frames)
+  function computeNodes(m){
+    const base=f0();
+    // preservar flash por índice
+    const oldFlash=nodes.map(function(n){return n.flash;});
+    nodes.length=0;
+    for(let i=0;i<nHarm;i++){
+      const n=i+1;
+      const f=n*base;
+      const x=Math.log2(f/base);     // = log2(n)
+      const p=spiralPos(x, m);
+      const info=pitchInfo(f);
+      nodes.push({
+        n:n, f:f, x:p.x, y:p.y, r:8, theta:p.theta, rad:p.r,
+        info:info, flash: oldFlash[i]||0
+      });
+    }
+  }
+
+  function drawNodes(m){
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let i=0;i<nodes.length;i++){
+      const nd=nodes[i];
+      const sel=(i===selected);
+      const pc=nd.info.pc;
+      const baseR = sel ? 9 : 6;
+      const r = baseR + nd.flash*7;
+      // halo
+      const haloR=r*3.4 + nd.flash*18 + (sel?10:0);
+      const g=ctx.createRadialGradient(nd.x,nd.y,0,nd.x,nd.y,haloR);
+      g.addColorStop(0, pcColor(pc, 0.42 + nd.flash*0.5 + (sel?0.18:0)));
+      g.addColorStop(1, pcColor(pc, 0));
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(nd.x,nd.y,haloR,0,7); ctx.fill();
+      // punto
+      ctx.fillStyle=pcColor(pc, 0.9);
+      ctx.beginPath(); ctx.arc(nd.x,nd.y,r,0,7); ctx.fill();
+      // anillo del seleccionado
+      if(sel){
+        ctx.strokeStyle="rgba(233,233,245,0.9)";
+        ctx.lineWidth=1.6;
+        ctx.beginPath(); ctx.arc(nd.x,nd.y,r+5,0,7); ctx.stroke();
+      }
+    }
+    ctx.restore();
+
+    // etiquetas (source-over para legibilidad nítida)
+    ctx.save();
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    for(let i=0;i<nodes.length;i++){
+      const nd=nodes[i];
+      const sel=(i===selected);
+      // número de armónico justo encima del punto
+      ctx.fillStyle = sel ? "rgba(233,233,245,1)" : "rgba(233,233,245,0.82)";
+      ctx.font="700 "+(sel?12:10)+"px ui-monospace,Menlo,monospace";
+      ctx.fillText(String(nd.n), nd.x, nd.y - (12 + nd.flash*6));
+      // nombre de nota debajo (solo para los primeros / seleccionado, evita saturar)
+      if(nd.n<=8 || sel || nd.flash>0.15){
+        ctx.fillStyle = pcColor(nd.info.pc, 0.85);
+        ctx.font="600 9px ui-monospace,Menlo,monospace";
+        ctx.fillText(nd.info.name, nd.x, nd.y + 13);
+      }
+    }
+    ctx.restore();
+
+    // marca de la fundamental en el centro
+    ctx.save();
+    ctx.fillStyle="rgba(126,126,160,0.8)";
+    ctx.font="600 10px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText("f0 = "+noteName(fundMidi)+"  "+f0().toFixed(1)+" Hz", m.cx, m.cy);
+    ctx.restore();
+  }
+
+  function drawLegend(){
+    ctx.save();
+    ctx.font="500 12px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#7e7ea0";
+    ctx.fillText("el armónico 2 cae sobre el 1, el 4 sobre el 2… las octavas comparten radio y color", W/2, H-88);
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------
+  // PANEL DE INFORMACIÓN
+  // -------------------------------------------------------------
+  const infoEl=document.getElementById("info");
+  const iTitle=document.getElementById("iTitle");
+  const iFreq=document.getElementById("iFreq");
+  const iNote=document.getElementById("iNote");
+  const iCents=document.getElementById("iCents");
+  function syncInfo(){
+    if(selected<0 || selected>=nodes.length){
+      infoEl.classList.add("dim");
+      iTitle.textContent="clic en un punto";
+      iFreq.textContent="—"; iNote.textContent="—"; iCents.textContent="—";
+      return;
+    }
+    const nd=nodes[selected];
+    infoEl.classList.remove("dim");
+    iTitle.textContent="armónico n = "+nd.n;
+    iFreq.textContent=nd.f.toFixed(2)+" Hz";
+    iNote.textContent=nd.info.name;
+    const c=nd.info.cents;
+    iCents.textContent=(c>0?"+":"")+c+" ¢ "+(c===0?"(exacto)":"vs 12-TET");
+  }
+  syncInfo();
+
+  // -------------------------------------------------------------
+  // INTERACCIÓN: clic en un punto -> tocar y resaltar
+  // -------------------------------------------------------------
+  function getXY(e){
+    const r=cv.getBoundingClientRect();
+    const t=(e.touches&&e.touches[0]) || (e.changedTouches&&e.changedTouches[0]) || e;
+    return {x:t.clientX-r.left, y:t.clientY-r.top};
+  }
+  function pick(mx,my){
+    let best=-1, bd=1e9;
+    for(let i=0;i<nodes.length;i++){
+      const nd=nodes[i];
+      const d=Math.hypot(nd.x-mx, nd.y-my);
+      if(d<bd){ bd=d; best=i; }
+    }
+    if(best>=0 && bd<24){
+      const nd=nodes[best];
+      ctxOn();
+      playFreq(nd.f, 0.9);
+      nd.flash=1;
+      selected=best;
+      syncInfo();
+    }
+  }
+  cv.addEventListener("mousedown",function(e){ pick(getXY(e).x, getXY(e).y); });
+  cv.addEventListener("touchstart",function(e){
+    pick(getXY(e).x, getXY(e).y);
+    if(e.cancelable) e.preventDefault();
+  },{passive:false});
+
+  // -------------------------------------------------------------
+  // CONTROLES
+  // -------------------------------------------------------------
+  const playEl=document.getElementById("play");
+  playEl.addEventListener("click",function(){
+    ctxOn(); // gesto -> habilita audio
+    if(seqRunning){
+      seqRunning=false;
+      playEl.classList.remove("on");
+      playEl.textContent="▶ tocar serie";
+      return;
+    }
+    seqRunning=true; seqIdx=0; seqTimer=0;
+    playEl.classList.add("on");
+    playEl.textContent="■ parar";
+  });
+
+  const fundEl=document.getElementById("fund"), fundVal=document.getElementById("fundVal");
+  function applyFund(){
+    fundMidi=+fundEl.value;
+    fundVal.textContent=noteName(fundMidi);
+    selected=-1; syncInfo();
+  }
+  fundEl.addEventListener("input",applyFund);
+  applyFund();
+
+  const harmEl=document.getElementById("harm"), harmVal=document.getElementById("harmVal");
+  function applyHarm(){
+    nHarm=+harmEl.value;
+    harmVal.textContent=String(nHarm);
+    if(selected>=nHarm) selected=-1;
+    syncInfo();
+  }
+  harmEl.addEventListener("input",applyHarm);
+  applyHarm();
+
+  const gridEl=document.getElementById("grid");
+  gridEl.addEventListener("click",function(){
+    showGrid=!showGrid;
+    gridEl.classList.toggle("on",showGrid);
+  });
+
+  // -------------------------------------------------------------
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
