@@ -5,18 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>music0 · visualizaciones de la armonía</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23090912'/><circle cx='16' cy='16' r='9' fill='none' stroke='%233ee8d0' stroke-width='2.6'/><circle cx='16' cy='16' r='3' fill='%23ff4d9d'/></svg>">
-<meta name="description" content="24 juguetes interactivos para ver y oír la teoría musical — Canvas + Web Audio, sin dependencias — y un ensayo explorable.">
+<meta name="description" content="26 juguetes interactivos para ver y oír la teoría musical — Canvas + Web Audio, sin dependencias — y un ensayo explorable.">
 <meta name="theme-color" content="#06060d">
 <meta property="og:type" content="website">
 <meta property="og:title" content="music0 · ver la armonía">
-<meta property="og:description" content="24 visualizaciones interactivas de la armonía musical, en Canvas + Web Audio, sin dependencias. Y un ensayo explorable.">
+<meta property="og:description" content="26 visualizaciones interactivas de la armonía musical, en Canvas + Web Audio, sin dependencias. Y un ensayo explorable.">
 <meta property="og:url" content="https://meowrhino.github.io/music0/">
 <meta property="og:image" content="https://meowrhino.github.io/music0/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="music0 · ver la armonía">
-<meta name="twitter:description" content="24 visualizaciones interactivas de la armonía musical. Canvas + Web Audio, 0 dependencias.">
+<meta name="twitter:description" content="26 visualizaciones interactivas de la armonía musical. Canvas + Web Audio, 0 dependencias.">
 <meta name="twitter:image" content="https://meowrhino.github.io/music0/og.png">
 <style>
   :root{
@@ -26,6 +26,7 @@
     --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
   }
   *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
   body{background:var(--bg);color:var(--txt);font-family:var(--sans);min-height:100vh;
     overflow-x:hidden;-webkit-font-smoothing:antialiased}
   #bg{position:fixed;inset:0;z-index:0;opacity:.5}
@@ -52,6 +53,22 @@
   .ec-k{font:600 11px var(--mono);letter-spacing:.28em;text-transform:uppercase;color:var(--pu)}
   .ec-t{display:block;font:750 22px/1.2 var(--sans);margin:8px 0 4px;letter-spacing:-.01em}
   .ec-s{display:block;font:400 14px var(--sans);color:#aaaac6}
+  section.explora{margin-top:54px;scroll-margin-top:64px}
+  .ex-head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .ex-head h2{font:750 24px var(--sans);letter-spacing:-.01em}
+  .ex-more{margin-left:auto;font:600 13px var(--mono);color:var(--cy);text-decoration:none;border-bottom:1px solid transparent}
+  .ex-more:hover{border-color:var(--cy)}
+  .ex-lede{color:var(--dim);font:400 14px/1.5 var(--sans);margin-bottom:18px;max-width:700px}
+  .teasers{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+  .teaser{border:1px solid #1d1d34;border-radius:16px;overflow:hidden;background:#0a0a14}
+  .tframe{position:relative;width:100%;height:300px;background:#06060d}
+  .teaser iframe{position:absolute;inset:0;width:100%;height:100%;border:0;display:block}
+  .tph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#3a3a55;font:700 13px var(--mono)}
+  .teaser figcaption{display:flex;align-items:center;gap:8px;padding:9px 13px;border-top:1px solid #18182e;font:600 12px var(--mono);color:var(--dim)}
+  .teaser figcaption b{color:var(--txt)}
+  .teaser figcaption a{margin-left:auto;color:var(--cy);text-decoration:none;border:1px solid #233;border-radius:7px;padding:3px 8px;transition:.15s}
+  .teaser figcaption a:hover{background:var(--cy);color:#06060d;border-color:var(--cy)}
+  #galeria{scroll-margin-top:64px}
 
   section.cat{margin-top:46px}
   .cat-h{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px}
@@ -101,7 +118,7 @@
 </head>
 <body>
 <canvas id="bg"></canvas>
-<div class="topnav"><a href="ensayo.html">ensayo</a><a href="sobre.html">sobre</a></div>
+<div class="topnav"><a href="#explora">explora</a><a href="#galeria">galería</a><a href="ensayo.html">ensayo</a><a href="sobre.html">sobre</a></div>
 <div class="wrap">
   <header>
     <div class="kicker">music0 · galería</div>
@@ -117,18 +134,47 @@
     </a>
   </header>
 
+  <section class="explora" id="explora">
+    <div class="ex-head">
+      <h2>Explóralo en 30 segundos</h2>
+      <a class="ex-more" href="ensayo.html">ver el ensayo completo →</a>
+    </div>
+    <p class="ex-lede">Cuatro ideas, en vivo. Toca dentro de cada recuadro… y luego baja a la galería de las 26.</p>
+    <div class="teasers">
+      <figure class="teaser">
+        <div class="tframe"><div class="tph">cargando…</div><iframe data-src="pruebas/01-lissajous.html" title="Lissajous" loading="lazy"></iframe></div>
+        <figcaption><b>un intervalo es un cociente</b><a href="pruebas/01-lissajous.html" title="abrir Lissajous">↗</a></figcaption>
+      </figure>
+      <figure class="teaser">
+        <div class="tframe"><div class="tph">cargando…</div><iframe data-src="pruebas/03-tonnetz.html" title="Tonnetz" loading="lazy"></iframe></div>
+        <figcaption><b>la red de las tríadas</b><a href="pruebas/03-tonnetz.html" title="abrir Tonnetz">↗</a></figcaption>
+      </figure>
+      <figure class="teaser">
+        <div class="tframe"><div class="tph">cargando…</div><iframe data-src="pruebas/06-curva-disonancia.html" title="Disonancia" loading="lazy"></iframe></div>
+        <figcaption><b>por qué algo suena bien</b><a href="pruebas/06-curva-disonancia.html" title="abrir curva de disonancia">↗</a></figcaption>
+      </figure>
+      <figure class="teaser">
+        <div class="tframe"><div class="tph">cargando…</div><iframe data-src="pruebas/13-instrumento.html" title="Instrumento" loading="lazy"></iframe></div>
+        <figcaption><b>tócalo y todo reacciona</b><a href="pruebas/13-instrumento.html" title="abrir instrumento">↗</a></figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <div id="galeria"></div>
   <div id="sections"></div>
 
   <section class="more">
-    <h2>¿Hacia dónde lo llevamos?</h2>
-    <p class="s">Esto es el rumbo <b>A (galería + navegador)</b>, y ya hemos empezado a tocar otros:
-      el <b>Tonnetz+</b> es una primera pieza profunda (B) y esta portada agrupada por categoría es un
-      guiño al ensayo explorable (C). El destino es un hub que lo mezcle todo (E).</p>
+    <h2>Los cinco rumbos, recorridos</h2>
+    <p class="s">Empezó como una galería (A) y acabó siendo todo a la vez: piezas profundas en 3D (B),
+      un <a href="ensayo.html" style="color:var(--cy)">ensayo explorable</a> (C), un
+      <a href="pruebas/13-instrumento.html" style="color:var(--cy)">instrumento en vivo</a> (D) y esta
+      portada que lo funde todo (E). Los créditos y el cómo está hecho, en <a href="sobre.html" style="color:var(--cy)">sobre</a>.</p>
     <div class="rumbos">
-      <div class="rumbo now"><h3>A · galería ✦</h3><p>Mini-experimentos autónomos + este navegador. Donde vivimos.</p></div>
-      <div class="rumbo seed"><h3>B · showpiece ◐</h3><p>Pieza profunda: el Tonnetz+ (PLR + MIDI) ya apunta aquí. Siguiente: torus 3D.</p></div>
-      <div class="rumbo now"><h3>C · ensayo ✦</h3><p><a href="ensayo.html" style="color:var(--cy)">El ensayo explorable</a> ya hila las piezas con narrativa y widgets.</p></div>
-      <div class="rumbo"><h3>D · playground</h3><p>Instrumento en vivo: tocas (MIDI) y varias visualizaciones reaccionan a la vez.</p></div>
+      <div class="rumbo now"><h3>A · galería ✦</h3><p>El navegador de las 26 piezas.</p></div>
+      <div class="rumbo now"><h3>B · showpiece ✦</h3><p>Tonnetz 3D, orbifolds de díadas, tríadas y tétradas.</p></div>
+      <div class="rumbo now"><h3>C · ensayo ✦</h3><p><a href="ensayo.html" style="color:var(--cy)">Paseo narrativo</a> con widgets.</p></div>
+      <div class="rumbo now"><h3>D · instrumento ✦</h3><p>Tocas y todo reacciona a la vez.</p></div>
+      <div class="rumbo now"><h3>E · hub ✦</h3><p>Hero + explora + galería + créditos, en un scroll.</p></div>
     </div>
   </section>
 
@@ -219,6 +265,12 @@
     '24':{ac:'#e9ff5a',ttl:'Armonógrafo',cat:'cat. 2',vi:9,cd:7,
       d:'La máquina de péndulos amortiguados: los cocientes musicales dibujan figuras que decaen en espiral. Pariente del Lissajous.',
       tags:['Canvas','Web Audio'],href:'pruebas/24-armonografo.html'},
+    '25':{ac:'#9b6bff',ttl:'Nudo armónico 3D',cat:'cat. 2',vi:9,cd:7,
+      d:'Un Lissajous en el espacio: tres senos en cociente entero tejen un nudo. 4:5:6 = acorde mayor. Gíralo y suénalo.',
+      tags:['Canvas','Web Audio','3D'],href:'pruebas/25-nudo-armonico.html'},
+    '26':{ac:'#3ee8d0',ttl:'Chladni 3D',cat:'cat. 3',vi:9,cd:7,
+      d:'La placa de Chladni como relieve 3D; las líneas nodales (en cian) sobre el modo (n, m). Complementa la versión 2D.',
+      tags:['Canvas','Web Audio','3D'],href:'pruebas/26-chladni-3d.html'},
   };
   const SECTIONS=[
     {idx:'★', t:'Instrumento en vivo',
@@ -229,10 +281,10 @@
       keys:['02','03','11','12','14','15','21','22']},
     {idx:'II', t:'Frecuencia, ratios y afinación',
       b:'La música como números: cocientes simples, sobretonos, entonación justa frente al temperamento igual, e ilusiones de altura.',
-      keys:['01','04','10','09','16','23','24']},
+      keys:['01','04','10','09','16','23','24','25']},
     {idx:'III', t:'Física y espectro',
       b:'El sonido hecho materia y luz: placas vibrantes y el espectro en tiempo real.',
-      keys:['05','08','18','19']},
+      keys:['05','08','18','19','26']},
     {idx:'IV', t:'Psicoacústica y color',
       b:'Por qué algo suena consonante, y cómo el oído se vuelve color.',
       keys:['06','07','17','20']},
@@ -261,6 +313,15 @@
     });
     root.appendChild(sec);
   });
+
+  // teasers de la sección "Explora": cargan al acercarte y se liberan al alejarse
+  const tio=new IntersectionObserver(es=>{es.forEach(e=>{
+    const f=e.target.querySelector('iframe'), ph=e.target.querySelector('.tph');
+    if(e.isIntersecting){ if(!f.getAttribute('src') && f.dataset.src){ f.src=f.dataset.src;
+      f.addEventListener('load',()=>{ if(ph) ph.style.display='none'; },{once:true}); } }
+    else if(f.getAttribute('src')){ f.removeAttribute('src'); if(ph){ph.style.display='flex';} }
+  });},{rootMargin:'400px 0px 400px 0px'});
+  document.querySelectorAll('.teaser .tframe').forEach(t=>tio.observe(t));
 
   // fondo: Lissajous tenues que se transforman lentamente
   const cv=document.getElementById('bg'),ctx=cv.getContext('2d');

@@ -1,7 +1,7 @@
 # music0 · visualizaciones de la armonía musical
 
 [![en vivo](https://img.shields.io/badge/en%20vivo-meowrhino.github.io%2Fmusic0-3ee8d0?style=flat-square)](https://meowrhino.github.io/music0/)
-![piezas](https://img.shields.io/badge/piezas-24-9b6bff?style=flat-square)
+![piezas](https://img.shields.io/badge/piezas-26-9b6bff?style=flat-square)
 ![dependencias](https://img.shields.io/badge/dependencias-0-ff4d9d?style=flat-square)
 ![stack](https://img.shields.io/badge/Canvas%20%2B%20Web%20Audio-vanilla-e9ff5a?style=flat-square)
 
@@ -9,7 +9,7 @@
 
 [![music0](og.png)](https://meowrhino.github.io/music0/)
 
-**24 juguetes interactivos** para **ver y oír** la teoría musical, a partir de la
+**26 juguetes interactivos** para **ver y oír** la teoría musical, a partir de la
 [investigación](investigacion.md) de partida. Todo es **HTML + Canvas + Web Audio API** puro:
 sin build, sin dependencias, sin red. Cada pieza es un `.html` autónomo que funciona abriéndolo
 directamente. Hay además un **[ensayo explorable](ensayo.html)** y una página **[sobre](sobre.html)**.
@@ -29,7 +29,7 @@ python3 -m http.server 8000
 
 > El audio arranca al primer clic/gesto (política de autoplay de los navegadores).
 
-## Las pruebas (24 piezas, agrupadas por categoría)
+## Las pruebas (26 piezas, agrupadas por categoría)
 
 Puntuaciones de la investigación — **VI** = interés visual, **CD** = profundidad conceptual (1–10).
 En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
@@ -64,6 +64,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 16 | [Cuerdas pitagóricas](pruebas/16-cuerdas-baroque.html) | Cuerdas con longitud ∝ 1/frecuencia; se pulsan en secuencia y vibran. À la Baroque.me. | 8 | 9/8 |
 | 23 | [Hélice de croma](pruebas/23-helice-croma.html) | La hélice de la altura de Shepard; doble hélice de las dos escalas de tonos enteros. | 1 | 9/8 |
 | 24 | [Armonógrafo](pruebas/24-armonografo.html) | Péndulos amortiguados que dibujan el cociente: figuras que decaen en espiral. | 2 | 9/7 |
+| 25 | [Nudo armónico 3D](pruebas/25-nudo-armonico.html) | Un Lissajous en el espacio: 3 senos en cociente entero tejen un nudo. 4:5:6 = mayor. | 2 | 9/7 |
 
 **III · Física y espectro**
 
@@ -73,6 +74,7 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 | 08 | [Mandala FFT](pruebas/08-mandala-fft.html) | El espectro dibuja un mandala radial que late; con micrófono opcional. | 5 | 9/5 |
 | 18 | [Cromagrama](pruebas/18-cromagrama.html) | El espectro plegado en 12 clases de altura; círculo de croma + cromagrama desplazante. Con micro. | 5 | 8/8 |
 | 19 | [Espectrograma](pruebas/19-espectrograma.html) | El espectro en cascada: tiempo en X, frecuencia (log) en Y, brillo = energía. Con micro. | 5 | 8/6 |
+| 26 | [Chladni 3D](pruebas/26-chladni-3d.html) | La placa de Chladni como relieve 3D; líneas nodales en cian sobre el modo (n, m). | 3 | 9/7 |
 
 **IV · Psicoacústica y color**
 
@@ -85,28 +87,25 @@ En la portada (`index.html`) están ordenadas de lo geométrico a lo perceptual.
 
 ## Capa de color compartida
 
-El círculo cromático (02), el Tonnetz (03), el Tonnetz+ (11) y el toro (12) comparten un **selector de
-paleta** (arriba a la derecha: croma / **Scriabin** / 5tas). La elección se guarda en `localStorage`,
-así que cambiarla en una pieza **tiñe todas las demás** — una capa de color común sin romper la
-autonomía de cada `.html`. El mapa de Scriabin es el mismo de la pieza 07.
+Varias piezas (02, 03, 07, 10, 11, 12, 13, 21, 23) comparten un **selector de paleta**
+(croma / **Scriabin** / 5tas) que se guarda en `localStorage`: cambiarlo en una pieza **tiñe todas las
+demás** — una capa de color común sin romper la autonomía de cada `.html`. El mapa de Scriabin sale de
+la pieza 07; el 07 mismo lo sincroniza con su toggle Scriabin/sinestesia.
 
-## Rumbos posibles (la "web loquita")
+## Los cinco rumbos (todos recorridos ✦)
 
-- **A · Galería + navegador** ✦ *(aquí vivimos)* — mini-experimentos autónomos + este `index.html`.
-- **B · Showpiece profundo** ◐ *(en marcha)* — **Tonnetz+** (PLR + Web MIDI), **Tonnetz toroidal 3D**
-  y el **orbifold de Tymoczko** (banda de Möbius de díadas) ya son piezas profundas.
-- **C · Ensayo explorable** ✦ *(hecho)* — [`ensayo.html`](ensayo.html): scrollytelling de 10 paradas
-  que hila las piezas con narrativa y widgets incrustados (modelo osar.fr).
-- **D · Playground audiovisual en vivo** ✦ *(hecho)* — el **Instrumento (13)**: tocas
-  (piano/teclado/MIDI) y el círculo + Tonnetz + ondas reaccionan a la vez.
-- **E · Hub mixto** ◐ *(en marcha)* — el hub ya integra galería + ensayo destacado + pieza estrella
-  (★ instrumento); falta fundirlo aún más en una sola experiencia.
+- **A · Galería + navegador** — el `index.html` con las 26 piezas en 5 categorías.
+- **B · Showpiece profundo** — Tonnetz 3D toroidal y orbifolds de díadas (14), tríadas (15) y tétradas (22).
+- **C · Ensayo explorable** — [`ensayo.html`](ensayo.html): scrollytelling de 10 paradas con widgets.
+- **D · Playground en vivo** — el **Instrumento (13)**: tocas y el círculo + Tonnetz + ondas reaccionan.
+- **E · Hub mixto** — la portada funde hero en vivo + "Explora" (piezas en vivo) + galería + créditos en
+  un scroll, con [`sobre.html`](sobre.html) y nav compartida. Desplegado en GitHub Pages.
 
-## Ideas para el siguiente lote
+## Ideas para "v2" (opcional)
 
-- **Modo E** a tope: una portada-experiencia que funda hero en vivo + ensayo + galería en un solo scroll.
-- Más profundidad: orbifold de tétradas (4 notas), Chladni 3D (marching cubes), hélice de croma doble.
-- Detalles "baja" pendientes de las revisiones (etiquetas, guards) y unificar la capa de color en todas.
+- Fundir aún más el modo E con grabar/compartir lo que tocas; **Web MIDI** en más piezas.
+- Más piezas: orbifold de **péntadas**, **secuenciador/looper** sobre el Tonnetz, Chladni con marching cubes.
+- **Dominio propio** (CNAME).
 
 ## Estructura
 
@@ -141,7 +140,9 @@ music0/
     ├── 21-collares-escalas.html
     ├── 22-orbifold-tetradas.html
     ├── 23-helice-croma.html
-    └── 24-armonografo.html
+    ├── 24-armonografo.html
+    ├── 25-nudo-armonico.html
+    └── 26-chladni-3d.html
 ```
 
 ## Stack

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>25 · Nudo armónico 3D — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,Segoe UI,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .chip.sound{border-color:#3a3a5a}
+  .chip.sound.playing{color:#06060d;background:var(--mg);border-color:var(--mg);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg);width:104px}
+  .val{font:600 11px var(--mono);color:var(--cy);min-width:30px;text-align:right}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">25 · NUDO ARMÓNICO 3D</h1>
+  <span class="sub">una curva en el espacio donde 3 cocientes enteros tejen un acorde</span>
+</div>
+<div class="panel">
+  <div class="grp">
+    <span class="lbl">cociente</span>
+    <span class="chip" id="r-1-1-1">1:1:1</span>
+    <span class="chip" id="r-1-2-3">1:2:3</span>
+    <span class="chip on" id="r-4-5-6">4:5:6</span>
+    <span class="chip" id="r-2-3-4">2:3:4</span>
+    <span class="chip" id="r-3-4-5">3:4:5</span>
+    <span class="chip" id="r-3-5-8">3:5:8</span>
+    <span class="chip" id="r-5-6-7">5:6:7</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">apertura</span>
+    <input type="range" id="open" min="0" max="100" value="30" step="1">
+    <span class="val" id="openVal">30</span>
+  </div>
+  <span class="sep"></span>
+  <div class="grp">
+    <span class="lbl">rotación</span>
+    <input type="range" id="spin" min="0" max="100" value="26" step="1">
+    <span class="val" id="spinVal">26</span>
+  </div>
+  <span class="sep"></span>
+  <span class="chip sound" id="snd">▶ sonar acorde</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  function freq(midi){ return 440*Math.pow(2,(midi-69)/12); }
+
+  // -------------------------------------------------------------
+  // PRESETS DE COCIENTE a:b:c
+  // Cuando a:b:c son simples la curva se cierra en un nudo limpio.
+  // 'chord' nombra la relación de intervalos cuando procede.
+  // -------------------------------------------------------------
+  const PRESETS=[
+    {id:"r-1-1-1", a:1,b:1,c:1, chord:"unísono · una recta diagonal"},
+    {id:"r-1-2-3", a:1,b:2,c:3, chord:"octava + duodécima (1:2:3)"},
+    {id:"r-4-5-6", a:4,b:5,c:6, chord:"acorde MAYOR (do-mi-sol)"},
+    {id:"r-2-3-4", a:2,b:3,c:4, chord:"quinta + octava (2:3:4)"},
+    {id:"r-3-4-5", a:3,b:4,c:5, chord:"cuarta + tercera mayor (3:4:5)"},
+    {id:"r-3-5-8", a:3,b:5,c:8, chord:"sexta mayor + ~sexta (3:5:8)"},
+    {id:"r-5-6-7", a:5,b:6,c:7, chord:"triada armónica 5:6:7 (cluster)"}
+  ];
+  let preset=PRESETS[2];   // 4:5:6 por defecto
+
+  // -------------------------------------------------------------
+  // AUDIO  (solo tras gesto)
+  // base 110 Hz -> los 3 tonos son base*a, base*b, base*c, normalizados
+  // a un registro agradable dividiendo por el factor común aproximado.
+  // -------------------------------------------------------------
+  let actx=null, chordNodes=null, chordStop=0;
+  function ctxOn(){
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==="suspended") actx.resume();
+    return actx;
+  }
+  function chordFreqs(){
+    // normaliza para que el tono más grave quede cerca de ~165 Hz (registro cómodo)
+    const base=55;                              // Hz por unidad de cociente
+    const mn=Math.min(preset.a,preset.b,preset.c);
+    const k = 3 / mn;                           // sube el grave a ~3 unidades
+    return [preset.a,preset.b,preset.c].map(function(r){ return base*r*k; });
+  }
+  function playChord(){
+    const a=ctxOn(), t=a.currentTime, dur=2.4;
+    stopChord();
+    const fs=chordFreqs();
+    const master=a.createGain();
+    master.connect(a.destination);
+    master.gain.setValueAtTime(0.0001,t);
+    master.gain.exponentialRampToValueAtTime(0.5,t+0.04);
+    master.gain.setValueAtTime(0.5,t+dur-0.5);
+    master.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    const oscs=[];
+    fs.forEach(function(f,i){
+      const g=a.createGain();
+      g.connect(master);
+      g.gain.value=[0.34,0.30,0.26][i];
+      const o=a.createOscillator();
+      o.type="triangle";
+      o.frequency.value=f;
+      o.connect(g);
+      o.start(t); o.stop(t+dur+0.05);
+      oscs.push(o);
+    });
+    chordNodes={master:master,oscs:oscs};
+    chordStop=performance.now()+dur*1000;
+    sndEl.classList.add("playing");
+    setTimeout(function(){ sndEl.classList.remove("playing"); chordNodes=null; }, dur*1000+80);
+  }
+  function stopChord(){
+    if(!chordNodes) return;
+    try{
+      const t=actx.currentTime;
+      chordNodes.master.gain.cancelScheduledValues(t);
+      chordNodes.master.gain.setValueAtTime(chordNodes.master.gain.value||0.0001,t);
+      chordNodes.master.gain.exponentialRampToValueAtTime(0.0001,t+0.08);
+      chordNodes.oscs.forEach(function(o){ try{o.stop(t+0.1);}catch(e){} });
+    }catch(e){}
+    chordNodes=null;
+  }
+
+  // -------------------------------------------------------------
+  // ESTADO
+  // -------------------------------------------------------------
+  let openAmt=0.30;          // desfase/apertura del nudo (0..~1)
+  let spinSpeed=0.26;        // velocidad de auto-rotación
+  let yaw=0.6, pitch=-0.45;  // ángulos de vista
+  let dragging=false, lastX=0, lastY=0, velY=0;
+
+  // -------------------------------------------------------------
+  // CANVAS
+  // -------------------------------------------------------------
+  const cv=document.getElementById("c"), ctx=cv.getContext("2d");
+  let W,H,dpr;
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth; H=cv.clientHeight;
+    cv.width=W*dpr; cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener("resize",resize);
+
+  // -------------------------------------------------------------
+  // CURVA 3D — nudo armónico
+  // x=sin(a t + px), y=sin(b t + py), z=sin(c t + pz),  t en [0,2π]
+  // Los desfases px,py,pz dependen de 'apertura': a 0 el nudo es plano
+  // y simétrico; al abrir se separan y el nudo gana volumen.
+  // -------------------------------------------------------------
+  const SEG=900;             // muestras a lo largo de t
+  let curve=[];              // [{x,y,z}] crudos en [-1,1]
+  function buildCurve(){
+    curve.length=0;
+    const px=0, py=openAmt*Math.PI*0.5, pz=openAmt*Math.PI;
+    const a=preset.a, b=preset.b, c=preset.c;
+    for(let i=0;i<=SEG;i++){
+      const t=(i/SEG)*2*Math.PI;
+      curve.push({
+        x:Math.sin(a*t+px),
+        y:Math.sin(b*t+py),
+        z:Math.sin(c*t+pz)
+      });
+    }
+  }
+
+  // -------------------------------------------------------------
+  // PROYECCIÓN PSEUDO-3D MANUAL (sin librerías)
+  // rotación yaw (eje Y) + pitch (eje X) y perspectiva débil.
+  // Devuelve {x,y,depth} con depth normalizado -1(detrás)..+1(delante).
+  // -------------------------------------------------------------
+  function projectPoint(p, scale, cx, cy){
+    const cy_=Math.cos(yaw), sy=Math.sin(yaw);
+    // yaw alrededor del eje Y: mezcla x,z
+    let x1= p.x*cy_ + p.z*sy;
+    let z1=-p.x*sy  + p.z*cy_;
+    let y1= p.y;
+    // pitch alrededor del eje X: mezcla y,z
+    const cp=Math.cos(pitch), sp=Math.sin(pitch);
+    let y2= y1*cp - z1*sp;
+    let z2= y1*sp + z1*cp;
+    // perspectiva débil
+    const cam=3.2;
+    const persp=cam/(cam - z2);
+    return {
+      x: cx + x1*scale*persp,
+      y: cy - y2*scale*persp,
+      depth: z2          // -1..1 aprox
+    };
+  }
+
+  // -------------------------------------------------------------
+  // RENDER
+  // -------------------------------------------------------------
+  let last=0;
+  function draw(now){
+    requestAnimationFrame(draw);
+    const dt=last? Math.min((now-last)/1000,0.05):0;
+    last=now;
+
+    // auto-rotación (yaw) + inercia del arrastre vertical (pitch)
+    if(!dragging){
+      yaw += spinSpeed*dt;
+      pitch += velY*dt; velY*=0.90;
+      pitch = Math.max(-1.45, Math.min(1.45, pitch));
+    }
+
+    ctx.clearRect(0,0,W,H);
+
+    const scale=Math.min(W,H)*0.30;
+    const cx=W/2, cy=H/2;
+
+    // proyectar toda la curva
+    const pts=new Array(curve.length);
+    for(let i=0;i<curve.length;i++){
+      pts[i]=projectPoint(curve[i], scale, cx, cy);
+    }
+
+    // sombra/base tenue de la caja (ejes) para anclar el espacio
+    drawAxes(scale,cx,cy);
+
+    // dibujar la curva como segmentos, con glow neón, color por t,
+    // y profundidad modulando alpha/grosor (delante más brillante)
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.lineCap="round";
+    const n=curve.length;
+    for(let i=0;i<n-1;i++){
+      const p0=pts[i], p1=pts[i+1];
+      const tNorm=i/(n-1);                       // 0..1 a lo largo de t
+      const depth=(p0.depth+p1.depth)*0.5;       // -1..1
+      const front=(depth+1)/2;                   // 0 detrás .. 1 delante
+      // degradado de color a lo largo de t (cian -> magenta -> púrpura -> cian)
+      const hue=(tNorm*300 + 165) % 360;
+      const sat=82;
+      const lit=46 + front*22;
+      const alpha=0.10 + front*0.62;
+      // halo grueso y tenue
+      ctx.strokeStyle="hsla("+hue.toFixed(0)+","+sat+"%,"+lit+"%,"+(alpha*0.35).toFixed(3)+")";
+      ctx.lineWidth=(2.0 + front*5.0);
+      ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+      // núcleo brillante fino
+      ctx.strokeStyle="hsla("+hue.toFixed(0)+","+sat+"%,"+(lit+18)+"%,"+alpha.toFixed(3)+")";
+      ctx.lineWidth=(0.8 + front*2.0);
+      ctx.beginPath(); ctx.moveTo(p0.x,p0.y); ctx.lineTo(p1.x,p1.y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // tres marcadores que destellan al ritmo de cada oscilador del acorde
+    drawBeatNodes(pts, now);
+
+    drawLegend();
+  }
+
+  // caja-guía 3D muy tenue (el cubo [-1,1]^3) para dar sensación de espacio
+  const BOX=[
+    [-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+    [-1,-1, 1],[1,-1, 1],[1,1, 1],[-1,1, 1]
+  ];
+  const EDGES=[[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]];
+  function drawAxes(scale,cx,cy){
+    const v=BOX.map(function(b){ return projectPoint({x:b[0],y:b[1],z:b[2]}, scale, cx, cy); });
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    ctx.lineWidth=1;
+    for(let e=0;e<EDGES.length;e++){
+      const a=v[EDGES[e][0]], b=v[EDGES[e][1]];
+      const front=((a.depth+b.depth)/2+1)/2;
+      ctx.strokeStyle="rgba(123,123,160,"+(0.04+front*0.07).toFixed(3)+")";
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // marcadores que recorren la curva siguiendo cada eje (a,b,c) — pulsan si suena
+  function drawBeatNodes(pts, now){
+    const playing=!!chordNodes;
+    const cols=["62,232,208","255,77,157","155,107,255"];   // cian, magenta, púrpura
+    const rates=[preset.a,preset.b,preset.c];
+    const tSec=now/1000;
+    ctx.save();
+    ctx.globalCompositeOperation="lighter";
+    for(let k=0;k<3;k++){
+      // posición a lo largo de la curva, avanzando a la velocidad del cociente k
+      const phase=((tSec*0.12*rates[k]) % 1 + 1) % 1;
+      const idx=Math.floor(phase*(pts.length-1));
+      const p=pts[idx];
+      const front=(p.depth+1)/2;
+      const pulse=playing ? (0.55+0.45*Math.sin(tSec*rates[k]*2.2)) : 0.45;
+      const r=(3.0+front*4.0)*(0.7+pulse*0.7);
+      const haloR=r*3.4;
+      const g=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,haloR);
+      g.addColorStop(0,"rgba("+cols[k]+","+(0.55*front*pulse+0.2).toFixed(3)+")");
+      g.addColorStop(1,"rgba("+cols[k]+",0)");
+      ctx.fillStyle=g;
+      ctx.beginPath(); ctx.arc(p.x,p.y,haloR,0,7); ctx.fill();
+      ctx.fillStyle="rgba("+cols[k]+","+(0.5+front*0.45).toFixed(3)+")";
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawLegend(){
+    ctx.save();
+    ctx.font="500 12px ui-monospace,Menlo,monospace";
+    ctx.textAlign="center"; ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#7e7ea0";
+    const ratio=preset.a+":"+preset.b+":"+preset.c;
+    ctx.fillText("cociente "+ratio+" · "+preset.chord, W/2, H-92);
+    ctx.fillStyle="#56566f";
+    ctx.fillText("arrastra para girar · cocientes simples → nudo limpio", W/2, H-74);
+    ctx.restore();
+  }
+
+  // -------------------------------------------------------------
+  // INTERACCIÓN: arrastre para rotar la vista (yaw + pitch)
+  // -------------------------------------------------------------
+  function getXY(e){
+    const r=cv.getBoundingClientRect();
+    const t=(e.touches&&e.touches[0]) || (e.changedTouches&&e.changedTouches[0]) || e;
+    return {x:t.clientX-r.left, y:t.clientY-r.top};
+  }
+  function onDown(e){
+    const xy=getXY(e);
+    dragging=true; lastX=xy.x; lastY=xy.y;
+    cv.classList.add("drag");
+  }
+  function onMove(e){
+    if(!dragging) return;
+    const xy=getXY(e);
+    const dx=xy.x-lastX, dy=xy.y-lastY;
+    yaw += dx*0.010;
+    pitch += dy*0.010;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch));
+    velY = dy*0.010*60;
+    lastX=xy.x; lastY=xy.y;
+    if(e.cancelable) e.preventDefault();
+  }
+  function onUp(){
+    if(!dragging) return;
+    dragging=false;
+    cv.classList.remove("drag");
+    velY*=0.4;
+  }
+  cv.addEventListener("mousedown",onDown);
+  window.addEventListener("mousemove",onMove);
+  window.addEventListener("mouseup",onUp);
+  cv.addEventListener("touchstart",onDown,{passive:false});
+  cv.addEventListener("touchmove",onMove,{passive:false});
+  cv.addEventListener("touchend",onUp);
+
+  // -------------------------------------------------------------
+  // CONTROLES (panel)
+  // -------------------------------------------------------------
+  PRESETS.forEach(function(pr){
+    const el=document.getElementById(pr.id);
+    el.addEventListener("click",function(){
+      preset=pr;
+      PRESETS.forEach(function(p2){ document.getElementById(p2.id).classList.toggle("on", p2===pr); });
+      buildCurve();
+      // si está sonando, reencadenar el acorde con el nuevo cociente
+      if(chordNodes){ playChord(); }
+    });
+  });
+
+  const openEl=document.getElementById("open"), openVal=document.getElementById("openVal");
+  function applyOpen(){
+    const v=+openEl.value; openVal.textContent=v;
+    openAmt=v/100;                 // 0..1
+    buildCurve();
+  }
+  openEl.addEventListener("input",applyOpen);
+
+  const spinEl=document.getElementById("spin"), spinVal=document.getElementById("spinVal");
+  function applySpin(){
+    const v=+spinEl.value; spinVal.textContent=v;
+    spinSpeed=(v/100)*1.0;         // 0 .. 1 rad/s
+  }
+  spinEl.addEventListener("input",applySpin);
+
+  const sndEl=document.getElementById("snd");
+  sndEl.addEventListener("click",function(){
+    ctxOn();                       // gesto -> habilita audio
+    playChord();
+  });
+
+  // -------------------------------------------------------------
+  buildCurve();
+  applyOpen();
+  applySpin();
+  resize();
+  requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>26 · Chladni 3D (superficie) — music0</title>
+<style>
+  :root{
+    --bg:#06060d; --txt:#e9e9f5; --dim:#7e7ea0;
+    --cy:#3ee8d0; --mg:#ff4d9d; --yl:#e9ff5a; --pu:#9b6bff; --bl:#5aa9ff;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --sans:system-ui,-apple-system,'Segoe UI',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--txt);font-family:var(--sans);overflow:hidden}
+  canvas{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:grab}
+  canvas.drag{cursor:grabbing}
+  .top{position:fixed;top:0;left:0;right:0;display:flex;align-items:baseline;gap:12px;
+    row-gap:10px;flex-wrap:wrap;padding:14px 18px;z-index:6;pointer-events:none}
+  .top *{pointer-events:auto}
+  .back{font:600 12px/1 var(--mono);color:var(--dim);text-decoration:none;
+    border:1px solid #2a2a40;border-radius:20px;padding:7px 12px;background:#0c0c18cc;
+    backdrop-filter:blur(6px);transition:.2s}
+  .back:hover{color:var(--cy);border-color:var(--cy)}
+  h1.title{font:700 14px/1 var(--mono);letter-spacing:.06em}
+  .sub{font:400 12px/1 var(--sans);color:var(--dim)}
+  .panel{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:5;
+    display:flex;flex-wrap:wrap;gap:8px;align-items:center;justify-content:center;
+    max-width:min(960px,95vw);
+    padding:12px 14px;background:#0c0c18cc;backdrop-filter:blur(10px);
+    border:1px solid #20203a;border-radius:16px}
+  .chip{font:600 12px var(--mono);color:var(--dim);background:transparent;border:1px solid #2a2a44;
+    border-radius:10px;padding:8px 11px;cursor:pointer;transition:.15s;user-select:none}
+  .chip:hover{color:var(--txt);border-color:#444466}
+  .chip.on{color:#06060d;background:var(--cy);border-color:var(--cy);font-weight:700}
+  .grp{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .lbl{font:600 10px var(--mono);color:var(--dim);text-transform:uppercase;letter-spacing:.1em}
+  .val{font:700 15px var(--mono);color:var(--yl);min-width:22px;text-align:center}
+  .sep{width:1px;height:24px;background:#23233e}
+  input[type=range]{accent-color:var(--mg)}
+  .readout{position:fixed;left:18px;bottom:18px;z-index:5;font:500 12px/1.7 var(--mono);color:var(--dim)}
+  .readout b{color:var(--cy)}
+  @media(max-width:640px){.readout{display:none}}
+  @media(max-width:680px){.panel{flex-wrap:nowrap;overflow-x:auto;justify-content:flex-start;left:8px;right:8px;transform:none;max-width:none}.panel .grp{flex-wrap:nowrap}.panel .sep{display:none}.panel::-webkit-scrollbar{height:5px}.panel::-webkit-scrollbar-thumb{background:#2a2a44;border-radius:4px}}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="top">
+  <a class="back" href="../index.html">← galería</a>
+  <h1 class="title">26 · CHLADNI 3D (SUPERFICIE)</h1>
+  <span class="sub">el relieve de la placa vibrando; en cian, las líneas nodales</span>
+</div>
+<div class="readout" id="readout"></div>
+<div class="panel">
+  <div class="grp"><span class="lbl">n</span>
+    <span class="chip" data-d="n-1">−</span><span class="val" id="nval">4</span><span class="chip" data-d="n+1">+</span></div>
+  <div class="sep"></div>
+  <div class="grp"><span class="lbl">m</span>
+    <span class="chip" data-d="m-1">−</span><span class="val" id="mval">3</span><span class="chip" data-d="m+1">+</span></div>
+  <div class="sep"></div>
+  <span class="chip" id="rand">⤮ aleatorio</span>
+  <span class="chip" id="sound">▶ sonar</span>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  const NOTAS=["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+  const MONO="ui-monospace,Menlo,Consolas,monospace";
+
+  let n=4, m=3;
+  const RES=44;                 // puntos por lado de la malla (≈44x44)
+  const AMP=0.42;               // amplitud del relieve
+  const OMEGA=3.0;              // velocidad de la vibración temporal
+  const EPS=0.06;               // umbral |z| para considerar zona nodal
+
+  // ---------- desplazamiento del modo (n,m) de placa cuadrada ----------
+  // z(x,y) = sin(nπx)sin(mπy) + sin(mπx)sin(nπy),  x,y ∈ [0,1]
+  function modeZ(x,y){
+    return Math.sin(n*Math.PI*x)*Math.sin(m*Math.PI*y)
+         + Math.sin(m*Math.PI*x)*Math.sin(n*Math.PI*y);
+  }
+
+  // ---------- malla precalculada (z estático) ----------
+  // grid[j][i] = {x,y,z0}  con x,y ∈ [-0.5,0.5] (centrado), z0 = modeZ normalizado a [-1,1]
+  const grid=[];
+  function buildGrid(){
+    grid.length=0;
+    let zmax=1e-9;
+    const raw=[];
+    for(let j=0;j<RES;j++){
+      raw[j]=[];
+      const fy=j/(RES-1);
+      for(let i=0;i<RES;i++){
+        const fx=i/(RES-1);
+        const z=modeZ(fx,fy);
+        raw[j][i]=z;
+        const az=Math.abs(z); if(az>zmax)zmax=az;
+      }
+    }
+    for(let j=0;j<RES;j++){
+      grid[j]=[];
+      const fy=j/(RES-1);
+      for(let i=0;i<RES;i++){
+        const fx=i/(RES-1);
+        grid[j][i]={ x:fx-0.5, y:fy-0.5, z0:raw[j][i]/zmax };
+      }
+    }
+  }
+  buildGrid();
+
+  // ---------- frecuencia propia ----------
+  function eigenFreq(){ return 55*Math.sqrt(n*n+m*m); }
+
+  // ---------- audio (sólo tras gesto) ----------
+  let actx=null,osc=null,gain=null,playing=false;
+  function toggleSound(){
+    if(!actx)actx=new(window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended')actx.resume();
+    playing=!playing;
+    if(playing){
+      gain=actx.createGain();gain.gain.value=0;gain.connect(actx.destination);
+      osc=actx.createOscillator();osc.type='sine';osc.frequency.value=eigenFreq();
+      osc.connect(gain);osc.start();
+      gain.gain.setTargetAtTime(0.12,actx.currentTime,0.05);
+    }else{
+      gain.gain.setTargetAtTime(0,actx.currentTime,0.05);
+      const o=osc;setTimeout(()=>{try{o.stop()}catch(e){}},300);osc=null;
+    }
+    const b=document.getElementById('sound');
+    b.classList.toggle('on',playing);
+    b.textContent=playing?'⏸ sonando':'▶ sonar';
+  }
+  function retune(){ if(osc)osc.frequency.setTargetAtTime(eigenFreq(),actx.currentTime,0.04); }
+
+  // ---------- cámara / proyección 3D manual ----------
+  let rotX=0.92, rotY=-0.55, autoY=0, auto=true;
+  const FOV=4.2;
+  let W,H,dpr,cx,cy,scale;
+  const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr;
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=W/2;cy=H/2; scale=Math.min(W,H)*0.62;
+  }
+  addEventListener('resize',resize);
+  // p = [x,y,z] en coords de mundo; rotación yaw (alrededor de Y) + pitch (alrededor de X) + perspectiva débil
+  function proj(px,py,pz){
+    const yaw=rotY+autoY, cyaw=Math.cos(yaw), syaw=Math.sin(yaw);
+    let x1= px*cyaw + pz*syaw, z1=-px*syaw + pz*cyaw, y1=py;
+    const cp=Math.cos(rotX), sp=Math.sin(rotX);
+    let y2=y1*cp - z1*sp, z2=y1*sp + z1*cp, x2=x1;
+    const persp=FOV/(FOV - z2);
+    return { x:cx + x2*persp*scale, y:cy + y2*persp*scale, z:z2, persp };
+  }
+
+  // ---------- color por altura ----------
+  // z<0 azul -> z≈0 oscuro/cian -> z>0 magenta cálido ; nodal (|z| pequeño) -> cian brillante
+  function heightColor(z, a){
+    const az=Math.abs(z);
+    if(az<EPS){ // línea nodal: cian brillante
+      return 'rgba(110,255,236,'+a+')';
+    }
+    if(z<0){ // azul -> púrpura hacia el fondo
+      const t=Math.min(1,az);
+      const r=Math.round(40+ (90-40)*t);
+      const g=Math.round(120+(60-120)*t);
+      const b=Math.round(200+(255-200)*t);
+      return 'rgba('+r+','+g+','+b+','+a+')';
+    }
+    // z>0 : cian -> magenta cálido
+    const t=Math.min(1,z);
+    const r=Math.round(62 +(255-62)*t);
+    const g=Math.round(180+(77-180)*t);
+    const b=Math.round(170+(157-170)*t);
+    return 'rgba('+r+','+g+','+b+','+a+')';
+  }
+
+  // ---------- render ----------
+  // buffer de proyección reutilizado: px,py por nodo + z mundo + alpha por profundidad
+  const PX=new Float32Array(RES*RES);
+  const PY=new Float32Array(RES*RES);
+  const PZ=new Float32Array(RES*RES);   // altura actual (con oscilación) -> color
+  const DZ=new Float32Array(RES*RES);   // z proyectada (profundidad) -> alpha/orden
+
+  function alphaZ(z){ return Math.max(0.12, Math.min(1, 0.32 + 0.68*((z+1.6)/3.2))); }
+
+  function draw(now){
+    requestAnimationFrame(draw);
+    if(auto && !dragging) autoY += 0.0018;
+
+    const t=now*0.001;
+    const oscT=Math.cos(OMEGA*t);   // la placa vibra: z * cos(ωt)
+
+    ctx.clearRect(0,0,W,H);
+
+    // 1) proyectar todos los nodos
+    let k=0, zmin=1e9, zmax=-1e9;
+    for(let j=0;j<RES;j++){
+      for(let i=0;i<RES;i++){
+        const nd=grid[j][i];
+        const zz=nd.z0*oscT;            // altura instantánea normalizada [-1,1]·osc
+        const p=proj(nd.x, zz*AMP, nd.y); // ojo: y-mundo = altura; z-mundo = profundidad de placa
+        PX[k]=p.x; PY[k]=p.y; PZ[k]=zz; DZ[k]=p.z;
+        if(p.z<zmin)zmin=p.z; if(p.z>zmax)zmax=p.z;
+        k++;
+      }
+    }
+
+    // 2) marco de la placa (los 4 bordes), tenue
+    ctx.globalCompositeOperation='source-over';
+    ctx.strokeStyle='rgba(120,120,200,0.18)'; ctx.lineWidth=1;
+    const idx=(i,j)=>j*RES+i;
+    ctx.beginPath();
+    let p0=idx(0,0); ctx.moveTo(PX[p0],PY[p0]);
+    [idx(RES-1,0),idx(RES-1,RES-1),idx(0,RES-1),idx(0,0)].forEach(q=>ctx.lineTo(PX[q],PY[q]));
+    ctx.stroke();
+
+    // 3) wireframe coloreado por altura, ordenado por profundidad (painter)
+    // recogemos segmentos (cada arista horizontal y vertical), su z medio y color medio
+    ctx.globalCompositeOperation='lighter';
+    const segs=[];
+    for(let j=0;j<RES;j++){
+      for(let i=0;i<RES;i++){
+        const a=idx(i,j);
+        if(i+1<RES){ const b=idx(i+1,j);
+          segs.push({a,b, z:(DZ[a]+DZ[b])*0.5, h:(PZ[a]+PZ[b])*0.5}); }
+        if(j+1<RES){ const b=idx(i,j+1);
+          segs.push({a,b, z:(DZ[a]+DZ[b])*0.5, h:(PZ[a]+PZ[b])*0.5}); }
+      }
+    }
+    segs.sort((s1,s2)=>s1.z-s2.z); // de fondo a frente
+    for(let s=0;s<segs.length;s++){
+      const sg=segs[s];
+      const al=alphaZ(sg.z);
+      const nodal=Math.abs(sg.h)<EPS;
+      ctx.strokeStyle=heightColor(sg.h, nodal?al:al*0.55);
+      ctx.lineWidth=nodal?1.6:0.9;
+      ctx.beginPath();
+      ctx.moveTo(PX[sg.a],PY[sg.a]);
+      ctx.lineTo(PX[sg.b],PY[sg.b]);
+      ctx.stroke();
+    }
+
+    // 4) puntos: resalta las zonas nodales con glow cian
+    const pts=[];
+    for(k=0;k<RES*RES;k++) pts.push(k);
+    pts.sort((p,q)=>DZ[p]-DZ[q]);
+    for(let s=0;s<pts.length;s++){
+      const q=pts[s], h=PZ[q], az=Math.abs(h);
+      if(az<EPS){ // nodal: punto cian brillante con halo
+        const al=alphaZ(DZ[q]);
+        const persp=Math.max(0.4,(DZ[q]+1.6)/2.0);
+        ctx.shadowColor='rgba(110,255,236,0.9)'; ctx.shadowBlur=10;
+        ctx.fillStyle='rgba(150,255,240,'+Math.min(1,al+0.15)+')';
+        ctx.beginPath(); ctx.arc(PX[q],PY[q],1.8*persp,0,7); ctx.fill();
+        ctx.shadowBlur=0;
+      }
+    }
+
+    ctx.globalCompositeOperation='source-over';
+    document.getElementById('readout').innerHTML=
+      `modo <b>(${n}, ${m})</b><br>malla ${RES}×${RES}<br>f ≈ <b>${eigenFreq().toFixed(0)}</b> Hz`;
+  }
+
+  // ---------- UI ----------
+  function setNM(nn,mm){
+    n=Math.max(1,Math.min(9,nn)); m=Math.max(1,Math.min(9,mm));
+    document.getElementById('nval').textContent=n;
+    document.getElementById('mval').textContent=m;
+    buildGrid(); retune();
+  }
+  document.querySelectorAll('[data-d]').forEach(el=>el.onclick=()=>{
+    const d=el.dataset.d;
+    if(d==='n-1')setNM(n-1,m); if(d==='n+1')setNM(n+1,m);
+    if(d==='m-1')setNM(n,m-1); if(d==='m+1')setNM(n,m+1);
+  });
+  document.getElementById('rand').onclick=()=>{
+    let a=1+Math.floor(Math.random()*8), b=1+Math.floor(Math.random()*8);
+    if(a===b)b=(b%8)+1; setNM(a,b);
+  };
+  document.getElementById('sound').onclick=toggleSound;
+
+  // ---------- interacción: arrastrar para girar ----------
+  let dragging=false, lx=0, ly=0;
+  cv.addEventListener('pointerdown',e=>{ dragging=true;lx=e.clientX;ly=e.clientY;
+    cv.classList.add('drag'); cv.setPointerCapture(e.pointerId); });
+  cv.addEventListener('pointermove',e=>{ if(!dragging)return;
+    const dx=e.clientX-lx, dy=e.clientY-ly; lx=e.clientX;ly=e.clientY;
+    rotY+=dx*0.008; rotX=Math.max(-1.5,Math.min(1.5,rotX+dy*0.008)); });
+  cv.addEventListener('pointerup',e=>{ dragging=false; cv.classList.remove('drag'); });
+  cv.addEventListener('pointercancel',()=>{ dragging=false; cv.classList.remove('drag'); });
+
+  resize(); requestAnimationFrame(draw);
+})();
+</script>
+</body>
+</html>
