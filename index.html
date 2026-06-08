@@ -118,7 +118,7 @@
 </head>
 <body>
 <canvas id="bg"></canvas>
-<div class="topnav"><a href="#explora">explora</a><a href="#galeria">galería</a><a href="ensayo.html">ensayo</a><a href="sobre.html">sobre</a></div>
+<div class="topnav"><a href="#" id="rand" title="abre una pieza al azar">🎲</a><a href="#explora">explora</a><a href="#galeria">galería</a><a href="ensayo.html">ensayo</a><a href="sobre.html">sobre</a></div>
 <div class="wrap">
   <header>
     <div class="kicker">music0 · galería</div>
@@ -322,6 +322,11 @@
     else if(f.getAttribute('src')){ f.removeAttribute('src'); if(ph){ph.style.display='flex';} }
   });},{rootMargin:'400px 0px 400px 0px'});
   document.querySelectorAll('.teaser .tframe').forEach(t=>tio.observe(t));
+
+  // 🎲 sorpréndeme: abre una pieza al azar
+  const randBtn=document.getElementById('rand');
+  if(randBtn) randBtn.onclick=e=>{ e.preventDefault();
+    const ks=Object.keys(C); location.href=C[ks[Math.floor(Math.random()*ks.length)]].href; };
 
   // fondo: Lissajous tenues que se transforman lentamente
   const cv=document.getElementById('bg'),ctx=cv.getContext('2d');
