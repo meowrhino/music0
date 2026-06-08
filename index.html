@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>music0 · visualizaciones de la armonía</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23090912'/><circle cx='16' cy='16' r='9' fill='none' stroke='%233ee8d0' stroke-width='2.6'/><circle cx='16' cy='16' r='3' fill='%23ff4d9d'/></svg>">
+<meta name="description" content="24 juguetes interactivos para ver y oír la teoría musical — Canvas + Web Audio, sin dependencias — y un ensayo explorable.">
+<meta name="theme-color" content="#06060d">
+<meta property="og:type" content="website">
+<meta property="og:title" content="music0 · ver la armonía">
+<meta property="og:description" content="24 visualizaciones interactivas de la armonía musical, en Canvas + Web Audio, sin dependencias. Y un ensayo explorable.">
+<meta property="og:url" content="https://meowrhino.github.io/music0/">
+<meta property="og:image" content="https://meowrhino.github.io/music0/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="music0 · ver la armonía">
+<meta name="twitter:description" content="24 visualizaciones interactivas de la armonía musical. Canvas + Web Audio, 0 dependencias.">
+<meta name="twitter:image" content="https://meowrhino.github.io/music0/og.png">
 <style>
   :root{
     --bg:#06060d; --txt:#eaeaf6; --dim:#8a8aac;
@@ -79,6 +92,11 @@
   footer a{color:var(--cy);text-decoration:none;border-bottom:1px solid transparent}
   footer a:hover{border-color:var(--cy)}
   .note{font:400 12px/1.5 var(--sans);color:#6a6a88;max-width:700px;margin-top:10px}
+  @media (prefers-reduced-motion: reduce){
+    a.card,a.essay-cta,.topnav a{transition:none}
+    a.card:hover,a.essay-cta:hover{transform:none}
+    #bg{opacity:.32}
+  }
 </style>
 </head>
 <body>
@@ -117,8 +135,8 @@
   <footer>
     <span>music0</span>
     <a href="ensayo.html">ensayo</a>
-    <a href="investigacion.md">investigación</a>
-    <a href="README.md">readme</a>
+    <a href="https://github.com/meowrhino/music0/blob/main/investigacion.md">investigación</a>
+    <a href="https://github.com/meowrhino/music0#readme">readme</a>
     <span style="color:#44445e">VI = interés visual · CD = profundidad conceptual (de la investigación)</span>
   </footer>
   <p class="note">Sugerencia: ábrelo con un servidor estático (p. ej. <code>python3 -m http.server</code>)
@@ -251,12 +269,13 @@
     W=innerWidth;H=innerHeight;cv.width=W*dpr;cv.height=H*dpr;cv.style.width=W+'px';cv.style.height=H+'px';
     ctx.setTransform(dpr,0,0,dpr,0,0);}
   addEventListener('resize',resize);resize();
+  const REDUCE = !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const COLORS=['#3ee8d0','#9b6bff','#ff4d9d','#5aa9ff','#e9ff5a'];
   // armonógrafo en vivo: curvas de Lissajous amortiguadas cuyos cocientes derivan lentamente
   function draw(now){
-    requestAnimationFrame(draw);
+    if(!REDUCE) requestAnimationFrame(draw);     // respeta prefers-reduced-motion (1 frame estático)
     ctx.clearRect(0,0,W,H);
-    const t=now/1000, cx=W*0.5, cy=H*0.44, R=Math.min(W,H)*0.46;
+    const t=(REDUCE?8:now/1000), cx=W*0.5, cy=H*0.44, R=Math.min(W,H)*0.46;
     const rot=t*0.04;
     ctx.globalCompositeOperation='lighter';
     for(let k=0;k<5;k++){

@@ -1,11 +1,20 @@
 # music0 · visualizaciones de la armonía musical
 
-Galería de mini-experimentos para **ver y oír** teoría musical, a partir de la
-[investigación](investigacion.md) de partida. Todo es **HTML + Canvas + Web Audio API** puro:
-sin build, sin dependencias, sin red. Cada prueba es un `.html` autónomo que funciona abriéndolo
-directamente.
+[![en vivo](https://img.shields.io/badge/en%20vivo-meowrhino.github.io%2Fmusic0-3ee8d0?style=flat-square)](https://meowrhino.github.io/music0/)
+![piezas](https://img.shields.io/badge/piezas-24-9b6bff?style=flat-square)
+![dependencias](https://img.shields.io/badge/dependencias-0-ff4d9d?style=flat-square)
+![stack](https://img.shields.io/badge/Canvas%20%2B%20Web%20Audio-vanilla-e9ff5a?style=flat-square)
 
-👉 **Abre [`index.html`](index.html)** — es el navegador/galería que enlaza a todas las pruebas.
+### 🌐 **[Pruébalo en vivo → meowrhino.github.io/music0](https://meowrhino.github.io/music0/)**
+
+[![music0](og.png)](https://meowrhino.github.io/music0/)
+
+**24 juguetes interactivos** para **ver y oír** la teoría musical, a partir de la
+[investigación](investigacion.md) de partida. Todo es **HTML + Canvas + Web Audio API** puro:
+sin build, sin dependencias, sin red. Cada pieza es un `.html` autónomo que funciona abriéndolo
+directamente. Hay además un **[ensayo explorable](ensayo.html)** y una página **[sobre](sobre.html)**.
+
+👉 Empieza por **[`index.html`](index.html)** (la galería) o por el **[ensayo](ensayo.html)**.
 
 ## Cómo abrir
 
